@@ -22,14 +22,15 @@
   "dependencies": {
     "@pruvi/env": "workspace:*",
     "dotenv": "catalog:",
-    "drizzle-orm": "^0.45.1",
     "pg": "^8.17.1",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.15",
     "@pruvi/config": "workspace:*",
     "@types/pg": "^8.16.0",
     "drizzle-kit": "^0.31.8",
+    "drizzle-orm": "^0.45.1",
     "typescript": "catalog:"
   }
 }

@@ -1,5 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Card, Chip, useThemeColor } from "heroui-native";
+import { Card, useThemeColor } from "heroui-native";
 import { Text, View, Pressable } from "react-native";
 
 import { Container } from "@/components/container";
@@ -10,10 +9,10 @@ import { authClient } from "@/lib/auth-client";
 export default function Home() {
   const { data: session } = authClient.useSession();
 
-  const mutedColor = useThemeColor("muted");
-  const successColor = useThemeColor("success");
-  const dangerColor = useThemeColor("danger");
-  const foregroundColor = useThemeColor("foreground");
+  const _mutedColor = useThemeColor("muted");
+  const _successColor = useThemeColor("success");
+  const _dangerColor = useThemeColor("danger");
+  const _foregroundColor = useThemeColor("foreground");
 
   return (
     <Container className="p-6">

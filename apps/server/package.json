@@ -15,8 +15,10 @@
     "@pruvi/db": "workspace:*",
     "@pruvi/env": "workspace:*",
     "better-auth": "catalog:",
+    "bullmq": "^5.70.1",
     "dotenv": "catalog:",
     "fastify": "^5.3.3",
+    "ioredis": "^5.9.3",
     "zod": "catalog:"
   },
   "devDependencies": {

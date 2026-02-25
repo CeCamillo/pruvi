@@ -1,0 +1,19 @@
+{
+  "name": "@pruvi/shared",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@pruvi/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

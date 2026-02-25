@@ -1,0 +1,5 @@
+# RALPH Progress Log
+# This file tracks what RALPH has done across sessions.
+# Format: [DATE] Issue #N — Brief description of what was implemented.
+
+[2026-02-25] Scaffolding — Project set up with domain schema, Redis, BullMQ, Vitest, quality gates, RALPH system files.

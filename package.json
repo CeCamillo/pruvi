@@ -20,7 +20,14 @@
     "db:start": "turbo -F @pruvi/db db:start",
     "db:watch": "turbo -F @pruvi/db db:watch",
     "db:stop": "turbo -F @pruvi/db db:stop",
-    "db:down": "turbo -F @pruvi/db db:down"
+    "db:down": "turbo -F @pruvi/db db:down",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "turbo check-types",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "prepare": "husky"
   },
   "dependencies": {
     "@pruvi/env": "workspace:*",
@@ -28,10 +35,17 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@pruvi/config": "workspace:*",
     "@types/node": "^22.13.14",
+    "eslint": "^10.0.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.8.1",
     "turbo": "^2.6.3",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18"
   },
   "packageManager": "pnpm@10.28.0"
 }
