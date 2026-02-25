@@ -1,0 +1,25 @@
+{
+  "name": "@pruvi/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@better-auth/expo": "catalog:",
+    "@pruvi/db": "workspace:*",
+    "@pruvi/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@pruvi/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

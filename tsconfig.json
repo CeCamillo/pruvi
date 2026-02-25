@@ -1,0 +1,3 @@
+{
+  "extends": "@pruvi/config/tsconfig.base.json"
+}
