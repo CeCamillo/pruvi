@@ -7,6 +7,8 @@ cd "$(dirname "$0")/../.."
 echo "=== RALPH: AFK mode ($MAX_ITERATIONS iterations max) ==="
 echo "Started at $(date)"
 
+git checkout main && git pull --ff-only
+
 for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo ""
   echo "--- Iteration $i of $MAX_ITERATIONS ---"
@@ -21,6 +23,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   fi
 
   echo "--- Iteration $i complete ---"
+  git checkout main && git pull --ff-only
 done
 
 echo ""

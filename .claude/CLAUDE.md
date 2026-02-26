@@ -57,13 +57,22 @@ pnpm db:start         # docker compose up -d
 pnpm db:stop          # docker compose stop
 ```
 
-## Quality Gates (Pre-commit)
+## Quality Gates
+
+### Pre-commit (local)
 
 All 3 must pass. No `--no-verify`.
 
 1. `pnpm exec lint-staged` — Prettier on staged files
 2. `pnpm typecheck` — tsc -b
 3. `pnpm test` — Vitest
+
+### CI (on every PR to main)
+
+1. `pnpm typecheck`
+2. `pnpm test:coverage` — Vitest + v8 coverage
+3. `pnpm lint` — ESLint strictTypeChecked
+4. `pnpm format:check` — Prettier
 
 ## Database
 
@@ -73,9 +82,34 @@ All 3 must pass. No `--no-verify`.
 Services receive `db` as dependency injection for testability.
 Tests use PGLite via `packages/db/src/test-client.ts`.
 
+## Error Handling
+
+Throw `AppError` subclasses (`NotFoundError`, `ValidationError`, `UnauthorizedError`, `ForbiddenError`, `ConflictError`) from `apps/server/src/errors.ts`. Never set status codes directly in route handlers — the Fastify error handler plugin converts errors to structured JSON automatically.
+
+## Branch Workflow
+
+- **RALPH:** `ralph/<issue>-<slug>` branches, always via PR, never merge own PR
+- **Human:** `feature/*` branches, all via PR
+- Never push directly to main
+
+## Reviewing RALPH PRs
+
+1. Dependencies injected (no singleton imports in logic)
+2. Tests exist for new/changed behavior
+3. Routes are thin — logic lives in services
+4. Files under 200 lines
+5. Contracts updated if API shape changed (`packages/shared`)
+6. Errors use `AppError` subclasses
+7. No raw SQL (use Drizzle query builder)
+8. No `console.log` (use `fastify.log` in server)
+
+## Transactions
+
+Use `db.transaction()` for multi-write operations and read-then-write patterns to prevent race conditions.
+
 ## Skills
 
-- `do-work` — 4-phase autonomous workflow (Explore → Implement → Feedback Loops → Commit & Close)
+- `do-work` — 4-phase autonomous workflow (Explore → Implement → Feedback Loops → Branch, PR & Close)
 - `do-work/DB-TDD` — Drizzle + PGLite TDD pattern
 - `do-work/FRONTEND-TDD` — React Native reducer TDD pattern
 - `do-work/QUEUE-TDD` — BullMQ processor TDD pattern

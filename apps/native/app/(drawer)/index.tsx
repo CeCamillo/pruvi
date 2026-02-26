@@ -29,7 +29,7 @@ export default function Home() {
           <Pressable
             className="bg-danger py-3 px-4 rounded-lg self-start active:opacity-70"
             onPress={() => {
-              authClient.signOut();
+              void authClient.signOut();
             }}
           >
             <Text className="text-foreground font-medium">Sign Out</Text>

@@ -3,6 +3,8 @@ import { auth } from "@pruvi/auth";
 import { env } from "@pruvi/env/server";
 import Fastify from "fastify";
 
+import { errorHandler } from "./plugins/error-handler.js";
+
 const baseCorsConfig = {
   origin: env.CORS_ORIGIN,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -16,6 +18,7 @@ const fastify = Fastify({
 });
 
 fastify.register(fastifyCors, baseCorsConfig);
+fastify.register(errorHandler);
 
 fastify.route({
   method: ["GET", "POST"],
@@ -34,7 +37,9 @@ fastify.route({
       });
       const response = await auth.handler(req);
       reply.status(response.status);
-      response.headers.forEach((value, key) => reply.header(key, value));
+      response.headers.forEach((value, key) => {
+        reply.header(key, value);
+      });
       reply.send(response.body ? await response.text() : null);
     } catch (error) {
       fastify.log.error({ err: error }, "Authentication Error:");
@@ -46,7 +51,7 @@ fastify.route({
   },
 });
 
-fastify.get("/", async () => {
+fastify.get("/", () => {
   return "OK";
 });
 
@@ -55,5 +60,5 @@ fastify.listen({ port: 3000 }, (err) => {
     fastify.log.error(err);
     process.exit(1);
   }
-  console.log("Server running on port 3000");
+  fastify.log.info("Server running on port 3000");
 });

@@ -48,18 +48,31 @@ If a step fails:
 3. Re-run from that step
 4. Do NOT skip ahead
 
-## Phase 4: Commit & Close
+## Phase 4: Branch, PR & Close
 
-1. Stage changed files: `git add <specific files>`
-2. Commit with message: `RALPH: <type>: <description> (Issue #NNN)`
+1. Create branch: `git checkout -b ralph/<issue-number>-<slug>`
+2. Stage changed files: `git add <specific files>`
+3. Commit with message: `RALPH: <type>: <description> (Issue #NNN)`
    - Types: `feat`, `fix`, `refactor`, `test`, `chore`
-3. Push: `git push`
-4. Close the issue: `gh issue close <NNN> --comment "Implemented in <commit-sha>"`
-5. Update `progress.txt` with what was done
+4. Push branch: `git push -u origin ralph/<issue-number>-<slug>`
+5. Open PR:
+
+   ```bash
+   gh pr create --title "RALPH: <type>: <description>" --body "Closes #NNN
+
+   ## Changes
+   - <bullet list of what changed>" --base main
+   ```
+
+6. **Never merge your own PR** — a human reviews and merges
+7. Update `progress.txt` with what was done
+8. Return to main: `git checkout main && git pull`
 
 ## Important
 
 - Never use `--no-verify` on commits
 - Never commit failing code
+- Never push directly to main — always use a PR
+- Never merge your own PR
 - If stuck after 3 attempts, leave a comment on the issue explaining the blocker and move on
 - Always check `progress.txt` at the start for context from previous sessions
