@@ -4,3 +4,4 @@
 
 [2026-02-25] Scaffolding — Project set up with domain schema, Redis, BullMQ, Vitest, quality gates, RALPH system files.
 [2026-03-01] Issue #28 Sub-task A — neverthrow setup, SM-2 algorithm (9 tests), dev auth middleware (X-User-Id header → user upsert → request.userId).
+[2026-03-01] Issue #28 Sub-task B — 200 ENEM questions seed (5 subjects × 40), composite index on (subject_id, difficulty), pnpm db:seed idempotent command. PR #33.
