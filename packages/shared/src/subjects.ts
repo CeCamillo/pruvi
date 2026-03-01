@@ -7,3 +7,9 @@ export const subjectSchema = z.object({
 });
 
 export type Subject = z.infer<typeof subjectSchema>;
+
+export const subjectWithCountSchema = subjectSchema.extend({
+  questionCount: z.number(),
+});
+
+export type SubjectWithCount = z.infer<typeof subjectWithCountSchema>;
