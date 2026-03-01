@@ -12,6 +12,8 @@ jobs:
   quality:
     name: Quality Gates
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +56,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: gh pr edit "${{ github.event.pull_request.number }}" --add-label ralph
+      - run: |
+          gh label create ralph --color 0075ca --description "Automated by RALPH" 2>/dev/null || true
+          gh pr edit "${{ github.event.pull_request.number }}" --add-label ralph
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

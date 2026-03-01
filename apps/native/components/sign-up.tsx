@@ -17,7 +17,7 @@ import { authClient } from "@/lib/auth-client";
 
 const signUpSchema = z.object({
   name: z.string().trim().min(1, "Name is required").min(2, "Name must be at least 2 characters"),
-  email: z.string().trim().min(1, "Email is required").email("Enter a valid email address"),
+  email: z.email("Enter a valid email address").trim(),
   password: z.string().min(1, "Password is required").min(8, "Use at least 8 characters"),
 });
 
@@ -120,7 +120,7 @@ export function SignUp() {
                         autoComplete="name"
                         textContentType="name"
                         returnKeyType="next"
-                        blurOnSubmit={false}
+                        submitBehavior="submit"
                         onSubmitEditing={() => {
                           emailInputRef.current?.focus();
                         }}
@@ -144,7 +144,7 @@ export function SignUp() {
                         autoComplete="email"
                         textContentType="emailAddress"
                         returnKeyType="next"
-                        blurOnSubmit={false}
+                        submitBehavior="submit"
                         onSubmitEditing={() => {
                           passwordInputRef.current?.focus();
                         }}
