@@ -21,6 +21,7 @@
     "db:watch": "turbo -F @pruvi/db db:watch",
     "db:stop": "turbo -F @pruvi/db db:stop",
     "db:down": "turbo -F @pruvi/db db:down",
+    "db:seed": "turbo -F @pruvi/db db:seed",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

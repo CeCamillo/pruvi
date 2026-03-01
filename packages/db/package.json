@@ -17,7 +17,8 @@
     "db:start": "docker compose up -d",
     "db:watch": "docker compose up",
     "db:stop": "docker compose stop",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "db:seed": "tsx src/seed.ts"
   },
   "dependencies": {
     "@pruvi/env": "workspace:*",
@@ -31,6 +32,7 @@
     "@types/pg": "^8.16.0",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
+    "tsx": "^4.19.2",
     "typescript": "catalog:"
   }
 }
