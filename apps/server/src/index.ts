@@ -3,6 +3,7 @@ import { auth } from "@pruvi/auth";
 import { env } from "@pruvi/env/server";
 import Fastify from "fastify";
 import { registerDevAuth } from "./middleware/dev-auth";
+import { registerSessionsRoutes } from "./features/sessions/sessions.routes";
 
 import { errorHandler } from "./plugins/error-handler.js";
 
@@ -21,6 +22,7 @@ const fastify = Fastify({
 fastify.register(fastifyCors, baseCorsConfig);
 fastify.register(errorHandler);
 registerDevAuth(fastify);
+registerSessionsRoutes(fastify);
 
 fastify.route({
   method: ["GET", "POST"],
