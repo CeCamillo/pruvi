@@ -1,8 +1,10 @@
 import { env } from "@pruvi/env/native";
 import { subjectWithCountSchema } from "@pruvi/shared/subjects";
 import { startSessionResponseSchema, dailySessionSchema } from "@pruvi/shared/sessions";
+import { answerResponseSchema } from "@pruvi/shared/questions";
 import type { SubjectWithCount } from "@pruvi/shared/subjects";
 import type { StartSessionResponse, DailySession } from "@pruvi/shared/sessions";
+import type { AnswerResponse } from "@pruvi/shared/questions";
 
 const BASE_URL = env.EXPO_PUBLIC_SERVER_URL;
 const DEFAULT_HEADERS = {
@@ -46,10 +48,14 @@ export const api = {
     return dailySessionSchema.parse(data);
   },
 
-  async answerQuestion(questionId: number, params: { selectedOptionIndex: number }): Promise<void> {
-    await request<unknown>(`/questions/${questionId}/answer`, {
+  async answerQuestion(
+    questionId: number,
+    params: { selectedOptionIndex: number },
+  ): Promise<AnswerResponse> {
+    const data = await request<unknown>(`/questions/${questionId}/answer`, {
       method: "POST",
       body: JSON.stringify(params),
     });
+    return answerResponseSchema.parse(data);
   },
 };
