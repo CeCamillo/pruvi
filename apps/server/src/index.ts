@@ -2,13 +2,14 @@ import fastifyCors from "@fastify/cors";
 import { auth } from "@pruvi/auth";
 import { env } from "@pruvi/env/server";
 import Fastify from "fastify";
+import { registerDevAuth } from "./middleware/dev-auth";
 
 import { errorHandler } from "./plugins/error-handler.js";
 
 const baseCorsConfig = {
   origin: env.CORS_ORIGIN,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "X-User-Id"],
   credentials: true,
   maxAge: 86400,
 };
@@ -19,6 +20,7 @@ const fastify = Fastify({
 
 fastify.register(fastifyCors, baseCorsConfig);
 fastify.register(errorHandler);
+registerDevAuth(fastify);
 
 fastify.route({
   method: ["GET", "POST"],

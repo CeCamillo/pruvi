@@ -15,6 +15,9 @@ catalogs:
     dotenv:
       specifier: ^17.2.2
       version: 17.3.1
+    neverthrow:
+      specifier: ^8.1.1
+      version: 8.2.0
     typescript:
       specifier: ^5
       version: 5.9.3
@@ -228,6 +231,9 @@ importers:
       ioredis:
         specifier: ^5.9.3
         version: 5.9.3
+      neverthrow:
+        specifier: "catalog:"
+        version: 8.2.0
       zod:
         specifier: "catalog:"
         version: 4.3.6
@@ -336,6 +342,9 @@ importers:
 
   packages/shared:
     dependencies:
+      neverthrow:
+        specifier: "catalog:"
+        version: 8.2.0
       zod:
         specifier: "catalog:"
         version: 4.3.6
@@ -7106,6 +7115,13 @@ packages:
         integrity: sha512-SrQrok4CATudVzBS7coSz26QRSmlK9TzzoFbeKfcPBUFPjcQM9Rqvr/DlJkOrwI/0KcgvMub1n1g5Jt9EgRn4A==,
       }
 
+  neverthrow@8.2.0:
+    resolution:
+      {
+        integrity: sha512-kOCT/1MCPAxY5iUV3wytNFUMUolzuwd/VF/1KCx7kf6CutrOsTie+84zTGTpgQycjvfLdBBdvBvFLqFD2c0wkQ==,
+      }
+    engines: { node: ">=18" }
+
   node-abort-controller@3.1.1:
     resolution:
       {
@@ -13867,6 +13883,10 @@ snapshots:
   negotiator@1.0.0: {}
 
   nested-error-stacks@2.0.1: {}
+
+  neverthrow@8.2.0:
+    optionalDependencies:
+      "@rollup/rollup-linux-x64-gnu": 4.59.0
 
   node-abort-controller@3.1.1: {}
 

@@ -8,5 +8,6 @@ catalog:
   "@better-auth/expo": ^1.4.18
   better-auth: ^1.4.18
   dotenv: ^17.2.2
+  neverthrow: ^8.1.1
   typescript: ^5
   zod: ^4.1.13
