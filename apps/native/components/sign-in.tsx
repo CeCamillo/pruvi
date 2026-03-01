@@ -16,7 +16,7 @@ import z from "zod";
 import { authClient } from "@/lib/auth-client";
 
 const signInSchema = z.object({
-  email: z.string().trim().min(1, "Email is required").email("Enter a valid email address"),
+  email: z.email("Enter a valid email address").trim(),
   password: z.string().min(1, "Password is required").min(8, "Use at least 8 characters"),
 });
 
@@ -118,7 +118,7 @@ function SignIn() {
                         autoComplete="email"
                         textContentType="emailAddress"
                         returnKeyType="next"
-                        blurOnSubmit={false}
+                        submitBehavior="submit"
                         onSubmitEditing={() => {
                           passwordInputRef.current?.focus();
                         }}
