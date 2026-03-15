@@ -22,3 +22,40 @@ export const INITIAL_SM2_STATE: SM2State = {
   repetitions: 0,
   nextReviewAt: new Date(), // overwritten on first review
 };
+
+function updateEF(ef: number, quality: QualityScore): number {
+  const newEF = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+  return Math.max(1.3, newEF);
+}
+
+export function calculateSM2(
+  state: SM2State,
+  quality: QualityScore,
+  now: Date = new Date()
+): SM2State {
+  const newEF = updateEF(state.easinessFactor, quality);
+
+  let newRepetitions: number;
+  let newInterval: number;
+
+  if (quality < 3) {
+    newRepetitions = 0;
+    newInterval = 1;
+  } else if (state.repetitions === 0) {
+    newRepetitions = 1;
+    newInterval = 1;
+  } else if (state.repetitions === 1) {
+    newRepetitions = 2;
+    newInterval = 6;
+  } else {
+    newRepetitions = state.repetitions + 1;
+    newInterval = Math.floor(state.interval * newEF);
+  }
+
+  return {
+    easinessFactor: newEF,
+    interval: newInterval,
+    repetitions: newRepetitions,
+    nextReviewAt: new Date(now.getTime() + newInterval * 86_400_000),
+  };
+}
