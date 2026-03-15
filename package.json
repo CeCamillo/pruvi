@@ -1,0 +1,36 @@
+{
+  "name": "pruvi",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F @pruvi/db db:push",
+    "db:studio": "turbo -F @pruvi/db db:studio",
+    "db:generate": "turbo -F @pruvi/db db:generate",
+    "db:migrate": "turbo -F @pruvi/db db:migrate",
+    "db:start": "turbo -F @pruvi/db db:start",
+    "db:watch": "turbo -F @pruvi/db db:watch",
+    "db:stop": "turbo -F @pruvi/db db:stop",
+    "db:down": "turbo -F @pruvi/db db:down"
+  },
+  "dependencies": {
+    "@pruvi/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@pruvi/config": "workspace:*",
+    "@types/bun": "catalog:",
+    "turbo": "^2.8.12",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@10.28.0"
+}

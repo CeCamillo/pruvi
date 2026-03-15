@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "scheme": "pruvi",
+    "userInterfaceStyle": "automatic",
+    "orientation": "default",
+    "web": {
+      "bundler": "metro"
+    },
+    "name": "pruvi",
+    "slug": "pruvi",
+    "plugins": ["expo-font"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
