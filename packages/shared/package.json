@@ -11,11 +11,15 @@
       "default": "./src/*.ts"
     }
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "dependencies": {
     "zod": "catalog:"
   },
   "devDependencies": {
     "@pruvi/config": "workspace:*",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
