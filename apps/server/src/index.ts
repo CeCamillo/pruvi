@@ -6,6 +6,7 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from "fastify-type-provider-zod";
+import { reviewsRoutes } from "./features/reviews";
 import { sessionsRoutes } from "./features/sessions";
 import { authPlugin } from "./plugins/auth";
 import { errorHandlerPlugin } from "./plugins/error-handler";
@@ -52,6 +53,7 @@ export async function buildApp() {
 
   // Feature routes
   await app.register(sessionsRoutes);
+  await app.register(reviewsRoutes);
 
   // Health check
   app.get("/health", async () => {
