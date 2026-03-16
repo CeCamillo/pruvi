@@ -2,31 +2,41 @@ import fastifyCors from "@fastify/cors";
 import { auth } from "@pruvi/auth";
 import { env } from "@pruvi/env/server";
 import Fastify from "fastify";
+import {
+  serializerCompiler,
+  validatorCompiler,
+} from "fastify-type-provider-zod";
+import { authPlugin } from "./plugins/auth";
+import { errorHandlerPlugin } from "./plugins/error-handler";
 
-const baseCorsConfig = {
-  origin: env.CORS_ORIGIN,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  credentials: true,
-  maxAge: 86400,
-};
+export async function buildApp() {
+  const app = Fastify({ logger: true });
 
-const fastify = Fastify({
-  logger: true,
-});
+  // Zod type provider
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
 
-fastify.register(fastifyCors, baseCorsConfig);
+  // Plugins
+  await app.register(fastifyCors, {
+    origin: env.CORS_ORIGIN,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    credentials: true,
+    maxAge: 86400,
+  });
+  await app.register(errorHandlerPlugin);
+  await app.register(authPlugin);
 
-fastify.route({
-  method: ["GET", "POST"],
-  url: "/api/auth/*",
-  async handler(request, reply) {
-    try {
+  // Auth catch-all (Better Auth handler)
+  app.route({
+    method: ["GET", "POST"],
+    url: "/api/auth/*",
+    async handler(request, reply) {
       const url = new URL(request.url, `http://${request.headers.host}`);
       const headers = new Headers();
-      Object.entries(request.headers).forEach(([key, value]) => {
-        if (value) headers.append(key, value.toString());
-      });
+      for (const [key, value] of Object.entries(request.headers)) {
+        if (value) headers.append(key, String(value));
+      }
       const req = new Request(url.toString(), {
         method: request.method,
         headers,
@@ -36,24 +46,25 @@ fastify.route({
       reply.status(response.status);
       response.headers.forEach((value, key) => reply.header(key, value));
       reply.send(response.body ? await response.text() : null);
-    } catch (error) {
-      fastify.log.error({ err: error }, "Authentication Error:");
-      reply.status(500).send({
-        error: "Internal authentication error",
-        code: "AUTH_FAILURE",
-      });
+    },
+  });
+
+  // Health check
+  app.get("/health", async () => {
+    return { success: true, data: "OK" };
+  });
+
+  return app;
+}
+
+// Start server when run directly (not imported for testing)
+// Bun provides import.meta.main for this purpose
+if (import.meta.main) {
+  const app = await buildApp();
+  app.listen({ port: 3000 }, (err) => {
+    if (err) {
+      app.log.error(err);
+      process.exit(1);
     }
-  },
-});
-
-fastify.get("/", async () => {
-  return "OK";
-});
-
-fastify.listen({ port: 3000 }, (err) => {
-  if (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-  console.log("Server running on port 3000");
-});
+  });
+}

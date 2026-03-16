@@ -7,7 +7,8 @@
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
-    "start": "bun run dist/index.mjs"
+    "start": "bun run dist/index.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
@@ -17,12 +18,16 @@
     "better-auth": "catalog:",
     "dotenv": "catalog:",
     "fastify": "^5.3.3",
+    "fastify-plugin": "^5.1.0",
+    "fastify-type-provider-zod": "^6.1.0",
+    "neverthrow": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@pruvi/config": "workspace:*",
     "@types/bun": "catalog:",
     "tsdown": "^0.16.5",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
