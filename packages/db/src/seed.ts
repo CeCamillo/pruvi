@@ -1,4 +1,6 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+
+dotenv.config({ path: "../../apps/server/.env" });
 import { drizzle } from "drizzle-orm/node-postgres";
 import { subject } from "./schema/subjects";
 import { question } from "./schema/questions";
