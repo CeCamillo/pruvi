@@ -19,7 +19,8 @@
     "db:start": "turbo -F @pruvi/db db:start",
     "db:watch": "turbo -F @pruvi/db db:watch",
     "db:stop": "turbo -F @pruvi/db db:stop",
-    "db:down": "turbo -F @pruvi/db db:down"
+    "db:down": "turbo -F @pruvi/db db:down",
+    "db:seed": "turbo -F @pruvi/db db:seed"
   },
   "dependencies": {
     "@pruvi/env": "workspace:*",
