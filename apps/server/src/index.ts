@@ -1,3 +1,4 @@
+import fastifyCompress from "@fastify/compress";
 import fastifyCors from "@fastify/cors";
 import { auth } from "@pruvi/auth";
 import { env } from "@pruvi/env/server";
@@ -29,6 +30,7 @@ export async function buildApp() {
     credentials: true,
     maxAge: 86400,
   });
+  await app.register(fastifyCompress);
   await app.register(errorHandlerPlugin);
   await app.register(redisPlugin);
   await app.register(authPlugin);

@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/compress": "^8.3.1",
     "@fastify/cors": "^11.0.1",
     "@pruvi/auth": "workspace:*",
     "@pruvi/db": "workspace:*",
