@@ -20,7 +20,8 @@
     "db:watch": "turbo -F @pruvi/db db:watch",
     "db:stop": "turbo -F @pruvi/db db:stop",
     "db:down": "turbo -F @pruvi/db db:down",
-    "db:seed": "turbo -F @pruvi/db db:seed"
+    "db:seed": "turbo -F @pruvi/db db:seed",
+    "audit": "pnpm audit --prod"
   },
   "dependencies": {
     "@pruvi/env": "workspace:*",

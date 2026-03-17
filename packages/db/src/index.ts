@@ -7,6 +7,7 @@ import * as schema from "./schema";
 const pool = new pg.Pool({
   connectionString: env.DATABASE_URL,
   max: 20,
+  ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
 
 export { pool };
