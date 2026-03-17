@@ -18,6 +18,7 @@
     "@pruvi/env": "workspace:*",
     "@pruvi/shared": "workspace:*",
     "better-auth": "catalog:",
+    "bullmq": "^5.71.0",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.3.3",

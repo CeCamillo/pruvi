@@ -13,7 +13,9 @@ import { sessionsRoutes } from "./features/sessions";
 import { streaksRoutes } from "./features/streaks";
 import { authPlugin } from "./plugins/auth";
 import { errorHandlerPlugin } from "./plugins/error-handler";
+import { queuePlugin } from "./plugins/queue";
 import { redisPlugin } from "./plugins/redis";
+import { startSessionPrefetchWorker } from "./workers/session-prefetch.worker";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -33,6 +35,7 @@ export async function buildApp() {
   await app.register(fastifyCompress);
   await app.register(errorHandlerPlugin);
   await app.register(redisPlugin);
+  await app.register(queuePlugin);
   await app.register(authPlugin);
 
   // Auth catch-all (Better Auth handler)
@@ -75,6 +78,10 @@ export async function buildApp() {
 // Bun provides import.meta.main for this purpose
 if (import.meta.main) {
   const app = await buildApp();
+  const prefetchWorker = startSessionPrefetchWorker();
+  app.addHook("onClose", async () => {
+    await prefetchWorker?.cleanup();
+  });
   app.listen({ port: 3000 }, (err) => {
     if (err) {
       app.log.error(err);
