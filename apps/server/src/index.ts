@@ -7,6 +7,7 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from "fastify-type-provider-zod";
+import { gamificationRoutes } from "./features/gamification";
 import { livesRoutes } from "./features/lives";
 import { reviewsRoutes } from "./features/reviews";
 import { sessionsRoutes } from "./features/sessions";
@@ -65,6 +66,7 @@ export async function buildApp() {
   await app.register(reviewsRoutes);
   await app.register(livesRoutes);
   await app.register(streaksRoutes);
+  await app.register(gamificationRoutes);
 
   // Health check
   app.get("/health", async () => {
