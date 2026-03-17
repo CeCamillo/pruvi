@@ -2,11 +2,14 @@ import { err, ok, type Result } from "neverthrow";
 import type { AppError } from "../../utils/errors";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import type { SessionsRepository } from "./sessions.repository";
-
-const DEFAULT_QUESTION_COUNT = 10;
+import type { QuestionsService } from "../questions/questions.service";
+import type { QuestionsRepository } from "../questions/questions.repository";
 
 export class SessionsService {
-  constructor(private repo: SessionsRepository) {}
+  constructor(
+    private repo: SessionsRepository,
+    private questionsService: QuestionsService
+  ) {}
 
   /** Start or resume today's session */
   async startSession(
@@ -18,7 +21,7 @@ export class SessionsService {
       {
         session: Awaited<ReturnType<SessionsRepository["createSession"]>>;
         questions: Awaited<
-          ReturnType<SessionsRepository["selectQuestions"]>
+          ReturnType<QuestionsRepository["selectQuestions"]>
         >;
       },
       AppError
@@ -28,12 +31,12 @@ export class SessionsService {
     const existing = await this.repo.findTodaySession(userId);
     if (existing && existing.status === "active") {
       // Resume: always fetch fresh questions (cache is for new sessions)
-      const questions = await this.repo.selectQuestions(
+      const questionsResult = await this.questionsService.selectForSession(
         userId,
-        DEFAULT_QUESTION_COUNT,
         mode
       );
-      return ok({ session: existing, questions });
+      if (questionsResult.isErr()) return err(questionsResult.error);
+      return ok({ session: existing, questions: questionsResult.value });
     }
 
     if (existing && existing.status === "completed") {
@@ -46,11 +49,17 @@ export class SessionsService {
     const session = await this.repo.createSession(userId);
 
     // Skip question selection if caller has cached questions
-    const questions = skipQuestions
-      ? []
-      : await this.repo.selectQuestions(userId, DEFAULT_QUESTION_COUNT, mode);
+    if (skipQuestions) {
+      return ok({ session, questions: [] });
+    }
 
-    return ok({ session, questions });
+    const questionsResult = await this.questionsService.selectForSession(
+      userId,
+      mode
+    );
+    if (questionsResult.isErr()) return err(questionsResult.error);
+
+    return ok({ session, questions: questionsResult.value });
   }
 
   /** Get today's session if it exists */

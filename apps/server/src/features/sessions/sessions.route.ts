@@ -3,11 +3,15 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { StartSessionBodySchema } from "@pruvi/shared";
 import { SessionsService } from "./sessions.service";
 import { SessionsRepository } from "./sessions.repository";
+import { QuestionsRepository } from "../questions/questions.repository";
+import { QuestionsService } from "../questions/questions.service";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
 
-const repo = new SessionsRepository(db);
-const service = new SessionsService(repo);
+const sessionsRepo = new SessionsRepository(db);
+const questionsRepo = new QuestionsRepository(db);
+const questionsService = new QuestionsService(questionsRepo);
+const service = new SessionsService(sessionsRepo, questionsService);
 
 const SESSION_CACHE_TTL = 30; // 30 seconds
 

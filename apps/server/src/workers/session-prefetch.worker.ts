@@ -1,7 +1,7 @@
 import { Worker, type Job } from "bullmq";
 import { env } from "@pruvi/env/server";
 import { db } from "@pruvi/db";
-import { SessionsRepository } from "../features/sessions/sessions.repository";
+import { QuestionsRepository } from "../features/questions/questions.repository";
 import type { SessionPrefetchJobData } from "../plugins/queue";
 import { parseRedisUrl } from "../utils/redis";
 import Redis from "ioredis";
@@ -23,7 +23,7 @@ export function startSessionPrefetchWorker() {
     lazyConnect: true,
   });
 
-  const repo = new SessionsRepository(db);
+  const repo = new QuestionsRepository(db);
 
   const worker = new Worker<SessionPrefetchJobData>(
     "session-prefetch",
