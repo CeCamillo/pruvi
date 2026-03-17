@@ -1,0 +1,9 @@
+node_modules
+.git
+.env
+*.md
+apps/native
+benchmark-results
+*.test.ts
+.turbo
+dist
