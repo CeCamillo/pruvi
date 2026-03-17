@@ -10,11 +10,11 @@ export type StartSessionBody = z.infer<typeof StartSessionBodySchema>;
 
 /** Session as returned to the client */
 export const SessionSchema = z.object({
-  id: z.number().int(),
-  userId: z.string(),
+  id: z.number().int().positive(),
+  userId: z.string().max(100),
   status: z.enum(["active", "completed"]),
-  questionCount: z.number().int(),
-  correctCount: z.number().int(),
+  questionCount: z.number().int().min(0),
+  correctCount: z.number().int().min(0),
   completedAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
 });

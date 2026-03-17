@@ -80,7 +80,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       preHandler: [fastify.authenticate],
       schema: {
         params: z.object({
-          id: z.coerce.number().int(),
+          id: z.coerce.number().int().positive(),
         }),
         body: z.object({
           questionCount: z.number().int().min(0),
