@@ -1,6 +1,7 @@
 import fastifyCompress from "@fastify/compress";
 import fastifyCors from "@fastify/cors";
 import { auth } from "@pruvi/auth";
+import { pool } from "@pruvi/db";
 import { env } from "@pruvi/env/server";
 import Fastify from "fastify";
 import {
@@ -68,9 +69,18 @@ export async function buildApp() {
   await app.register(streaksRoutes);
   await app.register(gamificationRoutes);
 
-  // Health check
-  app.get("/health", async () => {
-    return { success: true, data: "OK" };
+  // Health check — verifies DB connectivity for ALB
+  app.get("/health", async (_request, reply) => {
+    try {
+      await pool.query("SELECT 1");
+      return { success: true, data: "OK" };
+    } catch {
+      return reply.status(503).send({
+        success: false,
+        error: "Database unavailable",
+        code: "HEALTH_CHECK_FAILED",
+      });
+    }
   });
 
   return app;
