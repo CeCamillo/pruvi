@@ -1,6 +1,7 @@
 import fastifyCompress from "@fastify/compress";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
+import fastifyRateLimit from "@fastify/rate-limit";
 import { auth } from "@pruvi/auth";
 import { pool } from "@pruvi/db";
 import { env } from "@pruvi/env/server";
@@ -31,6 +32,10 @@ export async function buildApp() {
   await app.register(fastifyHelmet, {
     contentSecurityPolicy: false, // API-only server, no HTML
   });
+  await app.register(fastifyRateLimit, {
+    max: 100,
+    timeWindow: "1 minute",
+  });
   await app.register(fastifyCors, {
     origin: env.CORS_ORIGIN,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -44,10 +49,13 @@ export async function buildApp() {
   await app.register(queuePlugin);
   await app.register(authPlugin);
 
-  // Auth catch-all (Better Auth handler)
+  // Auth catch-all (Better Auth handler) — strict rate limit for brute-force protection
   app.route({
     method: ["GET", "POST"],
     url: "/api/auth/*",
+    config: {
+      rateLimit: { max: 10, timeWindow: "1 minute" },
+    },
     async handler(request, reply) {
       const url = new URL(request.url, `http://${request.headers.host}`);
       const headers = new Headers();

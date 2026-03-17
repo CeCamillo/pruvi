@@ -15,9 +15,12 @@ export const reviewsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     "/questions/:questionId/answer",
     {
       preHandler: [fastify.authenticate],
+      config: {
+        rateLimit: { max: 30, timeWindow: "1 minute" },
+      },
       schema: {
         params: z.object({
-          questionId: z.coerce.number().int(),
+          questionId: z.coerce.number().int().positive(),
         }),
         body: AnswerQuestionBodySchema,
       },

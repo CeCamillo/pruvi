@@ -14,6 +14,7 @@
     "@fastify/compress": "^8.3.1",
     "@fastify/cors": "^11.0.1",
     "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
     "@pruvi/auth": "workspace:*",
     "@pruvi/db": "workspace:*",
     "@pruvi/env": "workspace:*",
