@@ -1,0 +1,206 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-03-16T00:00:00.000Z",
+  "__export_source": "insomnia.importers",
+  "resources": [
+    {
+      "_id": "wrk_pruvi",
+      "_type": "workspace",
+      "name": "Pruvi API",
+      "description": "Pruvi backend API endpoints",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "parentId": "wrk_pruvi",
+      "name": "Local",
+      "data": {
+        "base_url": "http://localhost:3000",
+        "session_token": ""
+      }
+    },
+    {
+      "_id": "fld_auth",
+      "_type": "request_group",
+      "parentId": "wrk_pruvi",
+      "name": "Auth"
+    },
+    {
+      "_id": "fld_sessions",
+      "_type": "request_group",
+      "parentId": "wrk_pruvi",
+      "name": "Sessions"
+    },
+    {
+      "_id": "fld_reviews",
+      "_type": "request_group",
+      "parentId": "wrk_pruvi",
+      "name": "Reviews"
+    },
+    {
+      "_id": "fld_lives",
+      "_type": "request_group",
+      "parentId": "wrk_pruvi",
+      "name": "Lives"
+    },
+    {
+      "_id": "fld_streaks",
+      "_type": "request_group",
+      "parentId": "wrk_pruvi",
+      "name": "Streaks"
+    },
+    {
+      "_id": "fld_health",
+      "_type": "request_group",
+      "parentId": "wrk_pruvi",
+      "name": "Health"
+    },
+    {
+      "_id": "req_health",
+      "_type": "request",
+      "parentId": "fld_health",
+      "name": "Health Check",
+      "method": "GET",
+      "url": "{{ _.base_url }}/health",
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_signup",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "1. Sign Up",
+      "description": "Register a new user. Copy the session token from the Set-Cookie header for authenticated requests.",
+      "method": "POST",
+      "url": "{{ _.base_url }}/api/auth/sign-up/email",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@example.com\",\n  \"password\": \"supersecretpassword123\"\n}"
+      }
+    },
+    {
+      "_id": "req_signin",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "2. Sign In",
+      "description": "Login with email/password. Copy the session token from the Set-Cookie header.",
+      "method": "POST",
+      "url": "{{ _.base_url }}/api/auth/sign-in/email",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"supersecretpassword123\"\n}"
+      }
+    },
+    {
+      "_id": "req_get_session",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "3. Get Session",
+      "description": "Check current auth session. Uses cookie from sign-in.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/api/auth/get-session",
+      "headers": [
+        { "name": "Cookie", "value": "{{ _.session_token }}" }
+      ],
+      "body": {}
+    },
+    {
+      "_id": "req_start_session",
+      "_type": "request",
+      "parentId": "fld_sessions",
+      "name": "Start Session",
+      "description": "Start today's daily session. Returns SM-2-prioritized questions.\nSet mode to 'theoretical' to exclude calculation questions.",
+      "method": "POST",
+      "url": "{{ _.base_url }}/sessions/start",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Cookie", "value": "{{ _.session_token }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"mode\": \"all\"\n}"
+      }
+    },
+    {
+      "_id": "req_today_session",
+      "_type": "request",
+      "parentId": "fld_sessions",
+      "name": "Get Today's Session",
+      "description": "Check if there's an active or completed session for today.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/sessions/today",
+      "headers": [
+        { "name": "Cookie", "value": "{{ _.session_token }}" }
+      ],
+      "body": {}
+    },
+    {
+      "_id": "req_complete_session",
+      "_type": "request",
+      "parentId": "fld_sessions",
+      "name": "Complete Session",
+      "description": "Mark a session as completed. Replace :id with the session ID from Start Session response.",
+      "method": "POST",
+      "url": "{{ _.base_url }}/sessions/1/complete",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Cookie", "value": "{{ _.session_token }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"questionCount\": 10,\n  \"correctCount\": 7\n}"
+      }
+    },
+    {
+      "_id": "req_answer_question",
+      "_type": "request",
+      "parentId": "fld_reviews",
+      "name": "Answer Question",
+      "description": "Submit an answer for a question. Replace :questionId with a real question ID.\nselectedOptionIndex: 0-3 (A-D).\nReturns whether the answer was correct and remaining lives.",
+      "method": "POST",
+      "url": "{{ _.base_url }}/questions/1/answer",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Cookie", "value": "{{ _.session_token }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"selectedOptionIndex\": 2\n}"
+      }
+    },
+    {
+      "_id": "req_get_lives",
+      "_type": "request",
+      "parentId": "fld_lives",
+      "name": "Get Lives",
+      "description": "Get current lives count, max lives, and reset timestamp.\nAuto-refills if 24h timer has expired.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/users/me/lives",
+      "headers": [
+        { "name": "Cookie", "value": "{{ _.session_token }}" }
+      ],
+      "body": {}
+    },
+    {
+      "_id": "req_get_streaks",
+      "_type": "request",
+      "parentId": "fld_streaks",
+      "name": "Get Streaks",
+      "description": "Get current streak, longest streak, and total completed sessions.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/streaks",
+      "headers": [
+        { "name": "Cookie", "value": "{{ _.session_token }}" }
+      ],
+      "body": {}
+    }
+  ]
+}
