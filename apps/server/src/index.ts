@@ -84,7 +84,7 @@ if (import.meta.main) {
   app.addHook("onClose", async () => {
     await prefetchWorker?.cleanup();
   });
-  app.listen({ port: 3000 }, (err) => {
+  app.listen({ port: env.PORT, host: "0.0.0.0" }, (err) => {
     if (err) {
       app.log.error(err);
       process.exit(1);
