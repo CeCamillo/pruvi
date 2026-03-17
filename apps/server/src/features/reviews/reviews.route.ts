@@ -30,7 +30,12 @@ export const reviewsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         questionId,
         selectedOptionIndex
       );
-      return unwrapResult(result);
+      const response = unwrapResult(result);
+
+      // Invalidate lives cache — answer may have decremented lives
+      await fastify.cache.del(`lives:${request.userId}`);
+
+      return response;
     }
   );
 };

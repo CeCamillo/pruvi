@@ -12,6 +12,7 @@ import { sessionsRoutes } from "./features/sessions";
 import { streaksRoutes } from "./features/streaks";
 import { authPlugin } from "./plugins/auth";
 import { errorHandlerPlugin } from "./plugins/error-handler";
+import { redisPlugin } from "./plugins/redis";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -29,6 +30,7 @@ export async function buildApp() {
     maxAge: 86400,
   });
   await app.register(errorHandlerPlugin);
+  await app.register(redisPlugin);
   await app.register(authPlugin);
 
   // Auth catch-all (Better Auth handler)

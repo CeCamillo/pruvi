@@ -9,6 +9,8 @@ import { successResponse, unwrapResult } from "../../types";
 const repo = new SessionsRepository(db);
 const service = new SessionsService(repo);
 
+const SESSION_CACHE_TTL = 30; // 30 seconds
+
 export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
   // POST /sessions/start
   fastify.post(
@@ -29,6 +31,9 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         ({ correctOptionIndex: _, ...q }) => q
       );
 
+      // Invalidate today's session cache since we just created/resumed one
+      await fastify.cache.del(`session-today:${request.userId}`);
+
       return successResponse({ session, questions: safeQuestions });
     }
   );
@@ -40,8 +45,19 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       preHandler: [fastify.authenticate],
     },
     async (request) => {
+      const cacheKey = `session-today:${request.userId}`;
+
+      const cached = await fastify.cache.get(cacheKey);
+      if (cached) {
+        return successResponse(cached);
+      }
+
       const result = await service.getTodaySession(request.userId);
-      return unwrapResult(result);
+      const response = unwrapResult(result);
+
+      await fastify.cache.set(cacheKey, response.data, SESSION_CACHE_TTL);
+
+      return response;
     }
   );
 
@@ -69,7 +85,15 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         questionCount,
         correctCount
       );
-      return unwrapResult(result);
+      const response = unwrapResult(result);
+
+      // Invalidate caches that depend on session completion
+      await Promise.all([
+        fastify.cache.del(`session-today:${request.userId}`),
+        fastify.cache.del(`streaks:${request.userId}`),
+      ]);
+
+      return response;
     }
   );
 };
