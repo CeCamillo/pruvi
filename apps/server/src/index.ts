@@ -22,7 +22,17 @@ import { redisPlugin } from "./plugins/redis";
 import { startSessionPrefetchWorker } from "./workers/session-prefetch.worker";
 
 export async function buildApp() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: {
+      level: env.NODE_ENV === "production" ? "info" : "debug",
+      redact: [
+        "req.headers.authorization",
+        "req.headers.cookie",
+        "req.body.password",
+      ],
+    },
+    bodyLimit: 1_048_576, // 1MB
+  });
 
   // Zod type provider
   app.setValidatorCompiler(validatorCompiler);
