@@ -1,5 +1,6 @@
 import fastifyCompress from "@fastify/compress";
 import fastifyCors from "@fastify/cors";
+import fastifyHelmet from "@fastify/helmet";
 import { auth } from "@pruvi/auth";
 import { pool } from "@pruvi/db";
 import { env } from "@pruvi/env/server";
@@ -27,6 +28,9 @@ export async function buildApp() {
   app.setSerializerCompiler(serializerCompiler);
 
   // Plugins
+  await app.register(fastifyHelmet, {
+    contentSecurityPolicy: false, // API-only server, no HTML
+  });
   await app.register(fastifyCors, {
     origin: env.CORS_ORIGIN,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],

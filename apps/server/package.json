@@ -13,6 +13,7 @@
   "dependencies": {
     "@fastify/compress": "^8.3.1",
     "@fastify/cors": "^11.0.1",
+    "@fastify/helmet": "^13.0.2",
     "@pruvi/auth": "workspace:*",
     "@pruvi/db": "workspace:*",
     "@pruvi/env": "workspace:*",
