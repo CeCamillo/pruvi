@@ -106,7 +106,10 @@ run_bench "Get Streaks" "GET" "/streaks"
 # Auth-protected, today's session lookup
 run_bench "Get Today's Session" "GET" "/sessions/today"
 
-# Answer question — write-heavy (review_log insert + SM-2 + lives update)
+# Auth-protected, XP/level lookup (gamification module)
+run_bench "Get XP/Level" "GET" "/users/me/xp"
+
+# Answer question — write-heavy (review_log insert + SM-2 + XP + lives update)
 run_bench "Answer Question" "POST" "/questions/6/answer" '{"selectedOptionIndex":1}'
 
 echo ""
