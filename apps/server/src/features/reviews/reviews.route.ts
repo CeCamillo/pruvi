@@ -41,6 +41,16 @@ export const reviewsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         });
       }
 
+      // Anti-cheat: reject answers within 1s of session creation (automation)
+      const sessionAge = Date.now() - new Date(activeSession.createdAt).getTime();
+      if (sessionAge < 1000) {
+        return reply.status(429).send({
+          success: false,
+          error: "Too fast. Please wait before answering.",
+          code: "ANSWER_TOO_FAST",
+        });
+      }
+
       const isInSession = await fastify.cache.sismember(
         `session-questions:${activeSession.id}`,
         questionId
