@@ -40,6 +40,16 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         ({ correctOptionIndex: _, ...q }) => q
       );
 
+      // Store served question IDs in Redis for answer validation
+      if (session) {
+        const questionIds = (safeQuestions as Array<{ id: number }>).map((q) => q.id);
+        await fastify.cache.sadd(
+          `session-questions:${session.id}`,
+          questionIds,
+          86400 // 24h TTL
+        );
+      }
+
       // Invalidate caches
       await Promise.all([
         fastify.cache.del(`session-today:${request.userId}`),

@@ -30,6 +30,20 @@ export class CacheHelper {
     await this.redis.del(key);
   }
 
+  /** Store a set of values with TTL (for session-bound question validation). */
+  async sadd(key: string, members: (string | number)[], ttlSeconds: number): Promise<void> {
+    if (!this.redis) return;
+    if (members.length === 0) return;
+    await this.redis.sadd(key, ...members.map(String));
+    await this.redis.expire(key, ttlSeconds);
+  }
+
+  /** Check if a value is in a set. Returns true if Redis unavailable (graceful degradation). */
+  async sismember(key: string, member: string | number): Promise<boolean> {
+    if (!this.redis) return true; // allow if Redis is down
+    return (await this.redis.sismember(key, String(member))) === 1;
+  }
+
   /** Cache until midnight (local server time). Min TTL: 60s. */
   async setUntilMidnight(key: string, value: unknown): Promise<void> {
     if (!this.redis) return;
