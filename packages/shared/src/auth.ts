@@ -12,6 +12,7 @@ export const AnswerQuestionResponseSchema = z.object({
   correct: z.boolean(),
   correctOptionIndex: z.number().int().min(0).max(3),
   livesRemaining: z.number().int().min(0),
+  xpAwarded: z.number().int().min(0),
 });
 
 export type AnswerQuestionResponse = z.infer<

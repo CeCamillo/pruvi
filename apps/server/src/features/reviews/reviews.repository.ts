@@ -1,8 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { question } from "@pruvi/db/schema/questions";
 import { reviewLog } from "@pruvi/db/schema/review-log";
 import { user } from "@pruvi/db/schema/auth";
 import type { db } from "@pruvi/db";
+import { MAX_LIVES } from "@pruvi/shared";
 
 type DbClient = typeof db;
 
@@ -63,6 +64,24 @@ export class ReviewsRepository {
       .where(eq(user.id, userId))
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  /** Award XP to user */
+  async awardXp(userId: string, xpAmount: number) {
+    await this.db
+      .update(user)
+      .set({
+        totalXp: sql`${user.totalXp} + ${xpAmount}`,
+      })
+      .where(eq(user.id, userId));
+  }
+
+  /** Reset lives to MAX and clear the timer */
+  async resetLives(userId: string) {
+    await this.db
+      .update(user)
+      .set({ lives: MAX_LIVES, livesResetAt: null })
+      .where(eq(user.id, userId));
   }
 
   /** Decrement user's lives by 1 */

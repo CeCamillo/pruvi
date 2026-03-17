@@ -2,7 +2,9 @@ import { err, ok, type Result } from "neverthrow";
 import {
   calculateSM2,
   INITIAL_SM2_STATE,
+  calculateXpForAnswer,
   type QualityScore,
+  type Difficulty,
 } from "@pruvi/shared";
 import type { AppError } from "../../utils/errors";
 import { NotFoundError, ValidationError } from "../../utils/errors";
@@ -18,7 +20,12 @@ export class ReviewsService {
     selectedOptionIndex: number
   ): Promise<
     Result<
-      { correct: boolean; correctOptionIndex: number; livesRemaining: number },
+      {
+        correct: boolean;
+        correctOptionIndex: number;
+        livesRemaining: number;
+        xpAwarded: number;
+      },
       AppError
     >
   > {
@@ -59,28 +66,35 @@ export class ReviewsService {
       nextReviewAt: newState.nextReviewAt,
     });
 
-    // 7. Decrement lives on wrong answer
+    // 6b. Award XP
+    const xpAwarded = calculateXpForAnswer(
+      correct,
+      q.difficulty as Difficulty
+    );
+    if (xpAwarded > 0) {
+      await this.repo.awardXp(userId, xpAwarded);
+    }
+
+    // 7. Handle lives
     let livesRemaining = 5;
-    if (!correct) {
-      const userLives = await this.repo.getUserLives(userId);
-      if (userLives) {
-        livesRemaining = userLives.lives;
+    const userLives = await this.repo.getUserLives(userId);
 
-        // Auto-refill if reset time has passed
-        if (
-          userLives.livesResetAt &&
-          userLives.livesResetAt < new Date()
-        ) {
-          livesRemaining = 5;
-        }
+    if (userLives) {
+      livesRemaining = userLives.lives;
 
+      // Auto-refill if reset time has passed
+      if (userLives.livesResetAt && userLives.livesResetAt < new Date()) {
+        await this.repo.resetLives(userId);
+        livesRemaining = 5;
+      }
+
+      if (!correct) {
         if (livesRemaining <= 0) {
           return err(
             new ValidationError("No lives remaining. Wait for refill.")
           );
         }
 
-        // First decrement sets the reset timer
         const isFirstDecrement = livesRemaining === 5;
         await this.repo.decrementLives(
           userId,
@@ -89,24 +103,13 @@ export class ReviewsService {
         );
         livesRemaining -= 1;
       }
-    } else {
-      const userLives = await this.repo.getUserLives(userId);
-      if (userLives) {
-        livesRemaining = userLives.lives;
-        // Auto-refill if reset time has passed
-        if (
-          userLives.livesResetAt &&
-          userLives.livesResetAt < new Date()
-        ) {
-          livesRemaining = 5;
-        }
-      }
     }
 
     return ok({
       correct,
       correctOptionIndex: q.correctOptionIndex,
       livesRemaining,
+      xpAwarded,
     });
   }
 }
