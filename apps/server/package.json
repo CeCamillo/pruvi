@@ -7,7 +7,9 @@
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
+    "dev:worker": "bun run --hot src/worker.ts",
     "start": "bun run dist/index.mjs",
+    "start:worker": "bun run dist/worker.mjs",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
@@ -27,11 +29,13 @@
     "fastify-type-provider-zod": "^6.1.0",
     "ioredis": "^5.10.0",
     "neverthrow": "catalog:",
+    "pg": "^8.20.0",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@pruvi/config": "workspace:*",
     "@types/bun": "catalog:",
+    "@types/pg": "^8.18.0",
     "tsdown": "^0.16.5",
     "typescript": "catalog:",
     "vitest": "catalog:"

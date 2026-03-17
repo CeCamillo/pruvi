@@ -1,18 +1,20 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import { Pool } from "pg";
 import { sql } from "drizzle-orm";
-import * as schema from "@pruvi/db/schema";
+import * as schema from "@pruvi/db/schema/index";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
   "postgresql://postgres:password@localhost:5432/pruvi_test";
 
-let pool: pg.Pool | null = null;
+let pool: Pool | null = null;
 
 /** Get the test database pool (lazy-initialized). */
 export function getTestPool() {
   if (!pool) {
-    pool = new pg.Pool({ connectionString: TEST_DATABASE_URL, max: 5 });
+    pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 5 });
   }
   return pool;
 }
@@ -22,16 +24,15 @@ export function getTestDb() {
   return drizzle(getTestPool(), { schema });
 }
 
-/** Push schema to test database using Drizzle's push. */
+/** Push schema to test database by running the migration SQL. */
 export async function setupTestDb() {
   const testPool = getTestPool();
-  // Use drizzle-kit push programmatically isn't straightforward,
-  // so we run the migration SQL directly
-  const migrationSql = await Bun.file(
-    new URL("../../../../packages/db/src/migrations/0000_tranquil_blockbuster.sql", import.meta.url)
-  ).text();
+  const migrationPath = resolve(
+    import.meta.dirname ?? ".",
+    "../../../../packages/db/src/migrations/0000_tranquil_blockbuster.sql"
+  );
+  const migrationSql = readFileSync(migrationPath, "utf-8");
 
-  // Split by statement breakpoint and execute each
   const statements = migrationSql
     .split("--> statement-breakpoint")
     .map((s) => s.trim())
@@ -41,7 +42,6 @@ export async function setupTestDb() {
     try {
       await testPool.query(statement);
     } catch (err: unknown) {
-      // Ignore "already exists" errors (idempotent setup)
       const message = err instanceof Error ? err.message : String(err);
       if (!message.includes("already exists")) {
         throw err;

@@ -12,6 +12,7 @@
     "check-types": "turbo check-types",
     "dev:native": "turbo -F native dev",
     "dev:server": "turbo -F server dev",
+    "dev:worker": "turbo -F server dev:worker",
     "db:push": "turbo -F @pruvi/db db:push",
     "db:studio": "turbo -F @pruvi/db db:studio",
     "db:generate": "turbo -F @pruvi/db db:generate",
