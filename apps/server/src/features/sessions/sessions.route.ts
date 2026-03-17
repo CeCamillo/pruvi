@@ -23,16 +23,24 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     },
     async (request) => {
       const { mode } = request.body;
-      const result = await service.startSession(request.userId, mode);
+
+      // Check for pre-generated questions in Redis (already stripped of correctOptionIndex)
+      const prefetchKey = `prefetch:${request.userId}`;
+      const cachedQuestions = await fastify.cache.get<unknown[]>(prefetchKey);
+
+      const result = await service.startSession(request.userId, mode, !!cachedQuestions);
       const { session, questions } = unwrapResult(result).data;
 
-      // Strip correctOptionIndex from questions before sending to client
-      const safeQuestions = questions.map(
+      // If cache hit, use cached questions; otherwise strip correctOptionIndex from DB results
+      const safeQuestions = cachedQuestions ?? questions.map(
         ({ correctOptionIndex: _, ...q }) => q
       );
 
-      // Invalidate today's session cache since we just created/resumed one
-      await fastify.cache.del(`session-today:${request.userId}`);
+      // Invalidate caches
+      await Promise.all([
+        fastify.cache.del(`session-today:${request.userId}`),
+        fastify.cache.del(prefetchKey),
+      ]);
 
       return successResponse({ session, questions: safeQuestions });
     }
@@ -92,6 +100,20 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         fastify.cache.del(`session-today:${request.userId}`),
         fastify.cache.del(`streaks:${request.userId}`),
       ]);
+
+      // Enqueue next session pre-generation
+      if (fastify.queues.sessionPrefetch) {
+        await fastify.queues.sessionPrefetch.add(
+          `prefetch-${request.userId}`,
+          { userId: request.userId, mode: "all" },
+          {
+            removeOnComplete: true,
+            removeOnFail: 100,
+            attempts: 3,
+            backoff: { type: "exponential", delay: 1000 },
+          }
+        );
+      }
 
       return response;
     }

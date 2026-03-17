@@ -11,7 +11,8 @@ export class SessionsService {
   /** Start or resume today's session */
   async startSession(
     userId: string,
-    mode: "all" | "theoretical"
+    mode: "all" | "theoretical",
+    skipQuestions = false
   ): Promise<
     Result<
       {
@@ -26,7 +27,7 @@ export class SessionsService {
     // Check if there's already an active session today
     const existing = await this.repo.findTodaySession(userId);
     if (existing && existing.status === "active") {
-      // Resume: return the existing session with fresh questions
+      // Resume: always fetch fresh questions (cache is for new sessions)
       const questions = await this.repo.selectQuestions(
         userId,
         DEFAULT_QUESTION_COUNT,
@@ -43,11 +44,11 @@ export class SessionsService {
 
     // Create new session
     const session = await this.repo.createSession(userId);
-    const questions = await this.repo.selectQuestions(
-      userId,
-      DEFAULT_QUESTION_COUNT,
-      mode
-    );
+
+    // Skip question selection if caller has cached questions
+    const questions = skipQuestions
+      ? []
+      : await this.repo.selectQuestions(userId, DEFAULT_QUESTION_COUNT, mode);
 
     return ok({ session, questions });
   }
