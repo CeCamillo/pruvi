@@ -13,6 +13,10 @@ vi.mock("@pruvi/auth", () => ({
     api: { getSession: vi.fn() },
   },
 }));
+vi.mock("@pruvi/db", () => ({
+  db: {},
+  pool: { query: vi.fn().mockResolvedValue({ rows: [{ "?column?": 1 }] }) },
+}));
 
 import { buildApp } from "./index";
 
