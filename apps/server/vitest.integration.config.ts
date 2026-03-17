@@ -5,5 +5,6 @@ export default defineConfig({
     include: ["src/**/*.integration.test.ts"],
     testTimeout: 15000,
     hookTimeout: 15000,
+    fileParallelism: false, // run test files sequentially — they share a DB
   },
 });
