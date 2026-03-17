@@ -8,7 +8,8 @@
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
     "start": "bun run dist/index.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@fastify/compress": "^8.3.1",
