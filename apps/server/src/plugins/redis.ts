@@ -29,6 +29,19 @@ export class CacheHelper {
     if (!this.redis) return;
     await this.redis.del(key);
   }
+
+  /** Cache until midnight (local server time). Min TTL: 60s. */
+  async setUntilMidnight(key: string, value: unknown): Promise<void> {
+    if (!this.redis) return;
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const ttl = Math.max(
+      60,
+      Math.floor((midnight.getTime() - now.getTime()) / 1000)
+    );
+    await this.redis.set(key, JSON.stringify(value), "EX", ttl);
+  }
 }
 
 const plugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {

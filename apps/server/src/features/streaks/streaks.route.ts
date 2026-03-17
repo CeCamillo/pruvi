@@ -7,8 +7,6 @@ import { successResponse, unwrapResult } from "../../types";
 const repo = new StreaksRepository(db);
 const service = new StreaksService(repo);
 
-const CACHE_TTL = 60; // 60 seconds — streaks change once per day
-
 export const streaksRoutes: FastifyPluginAsyncZod = async (fastify) => {
   // GET /streaks
   fastify.get(
@@ -31,7 +29,7 @@ export const streaksRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const result = await service.getStreaks(request.userId);
       const response = unwrapResult(result);
 
-      await fastify.cache.set(cacheKey, response.data, CACHE_TTL);
+      await fastify.cache.setUntilMidnight(cacheKey, response.data);
 
       return response;
     }
