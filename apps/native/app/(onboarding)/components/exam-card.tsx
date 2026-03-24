@@ -65,6 +65,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     paddingHorizontal: 22,
+    borderWidth: 2,
+    borderColor: "transparent",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -72,7 +74,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardSelected: {
-    borderWidth: 2,
     borderColor: "#84CC16",
     shadowColor: "rgba(220, 252, 231, 1)",
     shadowOffset: { width: 0, height: 4 },
