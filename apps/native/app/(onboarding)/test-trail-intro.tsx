@@ -81,7 +81,7 @@ export default function TestTrailIntroScreen() {
 
       {/* Bottom Section */}
       <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 24 }]}>
-        <PrimaryButton label="COMEÇAR TESTE" onPress={() => router.push("/(drawer)")} />
+        <PrimaryButton label="COMEÇAR TESTE" onPress={() => router.push("/(onboarding)/test-question")} />
         <Pressable
           style={styles.skipButton}
           onPress={() => router.push("/(drawer)")}
