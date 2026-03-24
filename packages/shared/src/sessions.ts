@@ -29,10 +29,17 @@ export const StartSessionResponseSchema = z.object({
 
 export type StartSessionResponse = z.infer<typeof StartSessionResponseSchema>;
 
+/** POST /sessions/:id/complete — request body */
+export const CompleteSessionBodySchema = z.object({
+  questionCount: z.number().int().min(0),
+  correctCount: z.number().int().min(0),
+});
+
+export type CompleteSessionBody = z.infer<typeof CompleteSessionBodySchema>;
+
 /** POST /sessions/:id/complete — response */
 export const CompleteSessionResponseSchema = z.object({
   session: SessionSchema,
-  streak: z.number().int(),
 });
 
 export type CompleteSessionResponse = z.infer<
