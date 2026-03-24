@@ -1,7 +1,5 @@
 {
   "name": "@pruvi/shared",
-  "version": "0.0.0",
-  "private": true,
   "type": "module",
   "exports": {
     ".": {
@@ -11,16 +9,12 @@
       "default": "./src/*.ts"
     }
   },
-  "scripts": {
-    "test": "vitest run"
-  },
   "dependencies": {
     "neverthrow": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@pruvi/config": "workspace:*",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   }
 }
