@@ -13,6 +13,7 @@ import { livesRoutes } from "./features/lives";
 import { reviewsRoutes } from "./features/reviews";
 import { sessionsRoutes } from "./features/sessions";
 import { streaksRoutes } from "./features/streaks";
+import { devRoutes } from "./features/dev/dev.route";
 import { authPlugin } from "./plugins/auth";
 import { errorHandlerPlugin } from "./plugins/error-handler";
 import { queuePlugin } from "./plugins/queue";
@@ -29,7 +30,7 @@ export async function buildApp() {
   await app.register(fastifyCors, {
     origin: env.CORS_ORIGIN,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "cookie"],
     credentials: true,
     maxAge: 86400,
   });
@@ -67,6 +68,7 @@ export async function buildApp() {
   await app.register(livesRoutes);
   await app.register(streaksRoutes);
   await app.register(gamificationRoutes);
+  await app.register(devRoutes);
 
   // Health check — verifies DB connectivity for ALB
   app.get("/health", async (_request, reply) => {
