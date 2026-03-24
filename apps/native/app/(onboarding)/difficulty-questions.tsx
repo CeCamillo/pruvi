@@ -137,7 +137,7 @@ export default function DifficultyQuestionsScreen() {
 
       {/* Bottom Section */}
       <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 24 }]}>
-        <PrimaryButton label="PRÓXIMO" onPress={() => router.push("/(drawer)")} />
+        <PrimaryButton label="PRÓXIMO" onPress={() => router.push("/(onboarding)/daily-time")} />
       </View>
     </View>
   );
