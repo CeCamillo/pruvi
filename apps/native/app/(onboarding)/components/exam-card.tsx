@@ -30,7 +30,7 @@ function CheckUnselected() {
 type Props = {
   icon: ReactNode;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   selected: boolean;
   onPress: () => void;
 };
@@ -47,7 +47,7 @@ export function ExamCard({ icon, title, subtitle, selected, onPress }: Props) {
 
       <View style={styles.textContainer}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
 
       <View style={styles.checkContainer}>
