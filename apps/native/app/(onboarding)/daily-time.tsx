@@ -53,7 +53,7 @@ export default function DailyTimeScreen() {
         <PrimaryButton
           label="VOU CUMPRIR A META"
           showArrow={false}
-          onPress={() => router.push("/(drawer)")}
+          onPress={() => router.push("/(onboarding)/test-trail-intro")}
         />
       </View>
     </View>
