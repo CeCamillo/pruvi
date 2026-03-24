@@ -170,7 +170,7 @@ export default function ExamSelectScreen() {
           <Text style={styles.hintText}>Escolha seus focos para continuarmos.</Text>
         </View>
         <View style={styles.buttonWrapper}>
-          <PrimaryButton label="PRÓXIMO" onPress={() => router.push("/(drawer)")} />
+          <PrimaryButton label="PRÓXIMO" onPress={() => router.push("/(onboarding)/prep-questions")} />
         </View>
       </View>
     </View>
