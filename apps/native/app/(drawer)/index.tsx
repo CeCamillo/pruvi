@@ -520,6 +520,7 @@ function WeeklyActivityCard() {
 const TAB_ROUTES: Record<string, string> = {
   Home: "/(drawer)",
   Trilha: "/(drawer)/trilha",
+  Roleta: "/(drawer)/roleta",
 };
 
 function BottomTabBar({ bottomInset }: { bottomInset: number }) {

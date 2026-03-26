@@ -59,6 +59,22 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="roleta"
+        options={{
+          headerShown: false,
+          drawerLabel: ({ color, focused }) => (
+            <Text style={{ color: focused ? color : themeColorForeground }}>Roleta</Text>
+          ),
+          drawerIcon: ({ size, color, focused }) => (
+            <MaterialIcons
+              name="casino"
+              size={size}
+              color={focused ? color : themeColorForeground}
+            />
+          ),
+        }}
+      />
+      <Drawer.Screen
         name="(tabs)"
         options={{
           headerTitle: "Tabs",

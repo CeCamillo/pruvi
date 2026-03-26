@@ -130,17 +130,27 @@ function LeafIcon() {
   );
 }
 
-function BiologyEyeIcon() {
+function EditIcon() {
   return (
     <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
       <Path
-        d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"
-        stroke="#58CD04"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M14.667 1.333a2.357 2.357 0 010 2.762l-.352.352a3.8 3.8 0 01-.73-.655 4.4 4.4 0 01-.88-1.396 3.8 3.8 0 01-.107-.378l.352-.352a1.951 1.951 0 012.762 0h-.045z"
+        fill="#58CD04"
       />
-      <SvgCircle cx={8} cy={8} r={2.5} stroke="#58CD04" strokeWidth={1.5} />
+      <Path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M9.974 8.788a6 6 0 01-.588.553 5.6 5.6 0 01-.602.372c-.18.086-.373.15-.757.278l-2.028.676a.5.5 0 01-.54-.127.5.5 0 01-.127-.54l.676-2.027c.128-.385.192-.577.278-.758a5 5 0 01.372-.602 6 6 0 01.553-.588L10.7 2.538a4.4 4.4 0 001.088 1.674 4.4 4.4 0 001.674 1.088L9.974 8.788z"
+        fill="#58CD04"
+      />
+      <Path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M13.691 13.691c.976-.977.976-2.548.976-5.691 0-1.032 0-1.895-.035-2.623l-4.241 4.241c-.234.235-.41.41-.608.565a5.3 5.3 0 01-.75.363c-.227.108-.566.187-.88.279l-5.456 1.782a1.5 1.5 0 01-1.64-.355 1.5 1.5 0 01-.361-1.637l1.82-5.399c.293-.879.371-1.116.463-1.33.153-.365.357-.704.604-.952.15-.157.34-.332.576-.567L7.976 1.368C7.248 1.333 6.385 1.333 5.333 1.333c-3.143 0-4.714 0-5.69.977C.666 3.287.666 4.857.666 8c0 3.143 0 4.714.976 5.69.977.977 2.548.977 5.691.977 3.143 0 4.714 0 5.69-.976h.668z"
+        fill="#58CD04"
+      />
     </Svg>
   );
 }
@@ -270,9 +280,9 @@ function TopSection({ topInset }: { topInset: number }) {
         </View>
 
         <View style={styles.headerBadges}>
-          {/* Eye/Bio toggle */}
+          {/* Edit toggle */}
           <View style={styles.bioToggle}>
-            <BiologyEyeIcon />
+            <EditIcon />
             <View style={styles.toggleTrack}>
               <View style={styles.toggleThumb} />
             </View>
@@ -486,6 +496,7 @@ function TrailPath() {
 const TAB_ROUTES: Record<string, string> = {
   Home: "/(drawer)",
   Trilha: "/(drawer)/trilha",
+  Roleta: "/(drawer)/roleta",
 };
 
 function BottomTabBar({ bottomInset }: { bottomInset: number }) {
