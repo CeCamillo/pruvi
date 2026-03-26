@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle as SvgCircle, Defs, Path, RadialGradient, Stop } from "react-native-svg";
@@ -516,7 +517,13 @@ function WeeklyActivityCard() {
   );
 }
 
+const TAB_ROUTES: Record<string, string> = {
+  Home: "/(drawer)",
+  Trilha: "/(drawer)/trilha",
+};
+
 function BottomTabBar({ bottomInset }: { bottomInset: number }) {
+  const router = useRouter();
   const tabs = [
     { label: "Home", icon: <HomeIcon active />, active: true },
     { label: "Trilha", icon: <TrailIcon /> },
@@ -529,7 +536,16 @@ function BottomTabBar({ bottomInset }: { bottomInset: number }) {
     <View style={[styles.bottomBar, { paddingBottom: bottomInset }]}>
       <View style={styles.bottomBarContent}>
         {tabs.map((tab) => (
-          <Pressable key={tab.label} style={styles.tabItem}>
+          <Pressable
+            key={tab.label}
+            style={styles.tabItem}
+            onPress={() => {
+              const route = TAB_ROUTES[tab.label];
+              if (route && !tab.active) {
+                router.push(route as any);
+              }
+            }}
+          >
             {tab.active ? (
               <View style={styles.tabActiveContainer}>
                 {tab.icon}
