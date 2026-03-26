@@ -24,8 +24,8 @@ export default function TestQuestion2Screen() {
   return (
     <QuestionLayout
       data={QUESTION}
-      onSubmit={() => router.push("/(drawer)")}
-      onSkip={() => router.push("/(drawer)")}
+      onSubmit={() => router.push("/(onboarding)/test-question-3")}
+      onSkip={() => router.push("/(onboarding)/test-question-3")}
     />
   );
 }
