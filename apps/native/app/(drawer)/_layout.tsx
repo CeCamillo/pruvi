@@ -43,6 +43,22 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="trilha"
+        options={{
+          headerShown: false,
+          drawerLabel: ({ color, focused }) => (
+            <Text style={{ color: focused ? color : themeColorForeground }}>Trilha</Text>
+          ),
+          drawerIcon: ({ size, color, focused }) => (
+            <MaterialIcons
+              name="route"
+              size={size}
+              color={focused ? color : themeColorForeground}
+            />
+          ),
+        }}
+      />
+      <Drawer.Screen
         name="(tabs)"
         options={{
           headerTitle: "Tabs",
