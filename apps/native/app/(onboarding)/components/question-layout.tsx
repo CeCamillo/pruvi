@@ -19,9 +19,17 @@ type Props = {
   data: QuestionData;
   onSubmit: (selectedLetter: string) => void;
   onSkip: () => void;
+  submitLabel?: string;
+  skipLabel?: string;
 };
 
-export function QuestionLayout({ data, onSubmit, onSkip }: Props) {
+export function QuestionLayout({
+  data,
+  onSubmit,
+  onSkip,
+  submitLabel = "RESPONDER",
+  skipLabel = "PULAR",
+}: Props) {
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string | null>(null);
   const progress = (data.number / data.total) * 100;
@@ -41,7 +49,7 @@ export function QuestionLayout({ data, onSubmit, onSkip }: Props) {
             </View>
           </View>
           <Pressable style={styles.skipPill} onPress={onSkip}>
-            <Text style={styles.skipText}>PULAR</Text>
+            <Text style={styles.skipText}>{skipLabel}</Text>
           </Pressable>
         </View>
 
@@ -91,7 +99,7 @@ export function QuestionLayout({ data, onSubmit, onSkip }: Props) {
       {/* Bottom */}
       <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 24 }]}>
         <PrimaryButton
-          label="RESPONDER"
+          label={submitLabel}
           showArrow={false}
           onPress={() => {
             if (selected) onSubmit(selected);

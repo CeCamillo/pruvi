@@ -6,14 +6,16 @@ const QUESTION = {
   number: 4,
   total: 5,
   exam: "ENEM",
-  subject: "Ciências da Natureza",
-  context: "TODO — aguardando conteúdo do Figma.",
-  question: "TODO",
+  subject: "Biologia",
+  context:
+    "A fotossíntese é o processo fundamental pelo qual as plantas transformam energia luminosa em energia química, produzindo matéria orgânica.",
+  question:
+    "Qual é o principal subproduto liberado para a atmosfera durante a fase clara desse processo?",
   answers: [
-    { letter: "A", text: "TODO" },
-    { letter: "B", text: "TODO" },
-    { letter: "C", text: "TODO" },
-    { letter: "D", text: "TODO" },
+    { letter: "A", text: "Glicose (C₆H₁₂O₆)" },
+    { letter: "B", text: "Dióxido de Carbono (CO₂)" },
+    { letter: "C", text: "Oxigênio (O₂)" },
+    { letter: "D", text: "Vapor de Água (H₂O)" },
   ],
 };
 
