@@ -1,7 +1,18 @@
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, type ImageSourcePropType, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle as SvgCircle, Path, Rect } from "react-native-svg";
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const avatarAna = require("@/assets/images/avatar-ana.png") as ImageSourcePropType;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const avatarCarlos = require("@/assets/images/avatar-carlos.png") as ImageSourcePropType;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const avatarMaria = require("@/assets/images/avatar-maria.png") as ImageSourcePropType;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const avatarJoao = require("@/assets/images/avatar-joao.png") as ImageSourcePropType;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const avatarAlice = require("@/assets/images/avatar-alice.png") as ImageSourcePropType;
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -143,14 +154,14 @@ function MoreTabIcon() {
 // ─── Data ────────────────────────────────────────────────────────────────────
 
 const FRIENDS = [
-  { id: "1", name: "Ana Beatriz", streak: "12 Dias", xp: "2.4k XP", rank: 1, color: "#58CD04" },
-  { id: "2", name: "Carlos Lima", streak: "0 Dias", xp: "1.1k XP", rank: 2, color: "#6B6B6B" },
+  { id: "1", name: "Ana Beatriz", streak: "12 Dias", xp: "2.4k XP", rank: 1, avatar: avatarAna },
+  { id: "2", name: "Carlos Lima", streak: "0 Dias", xp: "1.1k XP", rank: 2, avatar: avatarCarlos },
 ];
 
 const SUGGESTIONS = [
-  { id: "1", name: "Maria Clara", tag: "ESTUDANTE DE MED" },
-  { id: "2", name: "João Victor", tag: "FOCO ENEM" },
-  { id: "3", name: "Alice Rocha", tag: "EXATAS" },
+  { id: "1", name: "Maria Clara", tag: "ESTUDANTE DE MED", avatar: avatarMaria },
+  { id: "2", name: "João Victor", tag: "FOCO ENEM", avatar: avatarJoao },
+  { id: "3", name: "Alice Rocha", tag: "EXATAS", avatar: avatarAlice },
 ];
 
 // ─── Components ──────────────────────────────────────────────────────────────
@@ -209,7 +220,7 @@ function FriendCard({ friend }: { friend: typeof FRIENDS[0] }) {
       {/* Avatar + rank */}
       <View style={styles.friendAvatarArea}>
         <View style={styles.friendAvatar}>
-          <View style={[styles.avatarPlaceholder, { backgroundColor: friend.rank === 1 ? "#E8F5E9" : "#F5F5F5" }]} />
+          <Image source={friend.avatar} style={styles.avatarImage} />
         </View>
         {hasRank && (
           <View style={[styles.rankBadge, friend.rank === 1 && styles.rankBadgeGreen]}>
@@ -245,7 +256,7 @@ function SuggestionCard({ suggestion }: { suggestion: typeof SUGGESTIONS[0] }) {
   return (
     <View style={styles.suggestionCard}>
       <View style={styles.suggestionAvatar}>
-        <View style={styles.suggestionAvatarInner} />
+        <Image source={suggestion.avatar} style={styles.suggestionAvatarImage} />
       </View>
       <Text style={styles.suggestionName}>{suggestion.name}</Text>
       <Text style={styles.suggestionTag}>{suggestion.tag}</Text>
@@ -438,17 +449,12 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   codeBox: {
-    backgroundColor: "rgba(240, 240, 240, 0.4)",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(239, 236, 236, 0.5)",
+    borderColor: "rgba(88, 205, 4, 0.15)",
     paddingHorizontal: 18,
     paddingVertical: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   codeLabel: { marginBottom: 4 },
   codeLabelText: {
@@ -608,12 +614,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: "hidden",
   },
-  avatarPlaceholder: {
+  avatarImage: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    borderWidth: 2,
-    borderColor: "rgba(239, 236, 236, 0.5)",
   },
   rankBadge: {
     position: "absolute",
@@ -699,9 +703,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(88, 205, 4, 0.15)",
   },
-  suggestionAvatarInner: {
-    flex: 1,
-    backgroundColor: "#F0F0F0",
+  suggestionAvatarImage: {
+    width: 52,
+    height: 52,
     borderRadius: 14,
   },
   suggestionName: {
