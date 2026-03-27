@@ -107,22 +107,6 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
-        name="mais"
-        options={{
-          headerShown: false,
-          drawerLabel: ({ color, focused }) => (
-            <Text style={{ color: focused ? color : themeColorForeground }}>Mais</Text>
-          ),
-          drawerIcon: ({ size, color, focused }) => (
-            <Ionicons
-              name="ellipsis-horizontal"
-              size={size}
-              color={focused ? color : themeColorForeground}
-            />
-          ),
-        }}
-      />
-      <Drawer.Screen
         name="(tabs)"
         options={{
           headerTitle: "Tabs",
