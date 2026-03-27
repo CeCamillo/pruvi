@@ -691,9 +691,9 @@ const styles = StyleSheet.create({
     gap: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   suggestionAvatar: {
     width: 56,
