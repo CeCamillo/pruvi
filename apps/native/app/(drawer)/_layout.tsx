@@ -107,6 +107,22 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="profile"
+        options={{
+          headerShown: false,
+          drawerLabel: ({ color, focused }) => (
+            <Text style={{ color: focused ? color : themeColorForeground }}>Perfil</Text>
+          ),
+          drawerIcon: ({ size, color, focused }) => (
+            <Ionicons
+              name="person-outline"
+              size={size}
+              color={focused ? color : themeColorForeground}
+            />
+          ),
+        }}
+      />
+      <Drawer.Screen
         name="(tabs)"
         options={{
           headerTitle: "Tabs",
