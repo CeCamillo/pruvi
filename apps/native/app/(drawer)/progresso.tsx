@@ -399,11 +399,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(239, 236, 236, 0.5)",
     padding: 18,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
   },
   achieveCardCompleted: {
     backgroundColor: "rgba(88, 205, 4, 0.08)",
