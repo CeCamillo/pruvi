@@ -91,6 +91,22 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="premium"
+        options={{
+          headerShown: false,
+          drawerLabel: ({ color, focused }) => (
+            <Text style={{ color: focused ? color : themeColorForeground }}>Premium</Text>
+          ),
+          drawerIcon: ({ size, color, focused }) => (
+            <Ionicons
+              name="diamond-outline"
+              size={size}
+              color={focused ? color : themeColorForeground}
+            />
+          ),
+        }}
+      />
+      <Drawer.Screen
         name="(tabs)"
         options={{
           headerTitle: "Tabs",
