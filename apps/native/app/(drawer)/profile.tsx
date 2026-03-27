@@ -1,8 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { type ImageSourcePropType, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle as SvgCircle, Path, Rect } from "react-native-svg";
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const avatarImg = require("@/assets/images/avatar-guilherme.png") as ImageSourcePropType;
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -112,7 +115,7 @@ function ProfileHeader() {
       <View style={styles.avatarContainer}>
         <View style={styles.avatarRing}>
           <View style={styles.avatarInner}>
-            <View style={styles.avatarPlaceholder} />
+            <Image source={avatarImg} style={styles.avatarImage} />
           </View>
         </View>
         <View style={styles.crownBadge}>
@@ -379,9 +382,10 @@ const styles = StyleSheet.create({
     borderRadius: 37,
     overflow: "hidden",
   },
-  avatarPlaceholder: {
-    flex: 1,
-    backgroundColor: "#E8F5E9",
+  avatarImage: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
   },
   crownBadge: {
     position: "absolute",
