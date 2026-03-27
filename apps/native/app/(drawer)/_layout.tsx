@@ -107,6 +107,22 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="progresso"
+        options={{
+          headerShown: false,
+          drawerLabel: ({ color, focused }) => (
+            <Text style={{ color: focused ? color : themeColorForeground }}>Progresso</Text>
+          ),
+          drawerIcon: ({ size, color, focused }) => (
+            <Ionicons
+              name="trophy-outline"
+              size={size}
+              color={focused ? color : themeColorForeground}
+            />
+          ),
+        }}
+      />
+      <Drawer.Screen
         name="profile"
         options={{
           headerShown: false,
