@@ -224,6 +224,7 @@ const TAB_ROUTES: Record<string, string> = {
   Roleta: "/(drawer)/roleta",
   Amigos: "/(drawer)/amigos",
   Premium: "/(drawer)/premium",
+  Mais: "/(drawer)/mais",
 };
 
 function BottomTabBar({ bottomInset }: { bottomInset: number }) {
