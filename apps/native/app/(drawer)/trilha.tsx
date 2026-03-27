@@ -3,13 +3,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, {
   Circle as SvgCircle,
-  ClipPath,
-  Defs,
-  G,
-  Mask,
   Path,
-  Rect,
 } from "react-native-svg";
+
+import { TrailHeader } from "./components/trail-header";
 
 // ─── Icons (extracted from Figma SVGs) ───────────────────────────────────────
 
@@ -100,56 +97,6 @@ function ChevronDownIcon() {
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-function FireIcon() {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-      <Path
-        d="M8 1.33c-.17.7-.56 1.93-1.33 2.77C5.7 5.17 4.67 5.87 4.67 7.83c0 2.2 1.5 3.84 3.33 3.84s3.33-1.64 3.33-3.84c0-2.33-1.55-4.1-3.33-6.5z"
-        fill="#FF9600"
-      />
-    </Svg>
-  );
-}
-
-function LeafIcon() {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-      <Path
-        d="M13.33 2.67s-1.5 0-3.66.83C7.5 4.33 5 6.5 4.33 9.33c-.5 2.17 0 4 0 4s2.5-.17 4.17-1.5c1.67-1.33 3-3.5 3.33-5.16.34-1.67 1.5-4 1.5-4zM2.67 13.33l4-4"
-        stroke="#58CD04"
-        strokeWidth={1.33}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-function EditIcon() {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-      <Path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M14.667 1.333a2.357 2.357 0 010 2.762l-.352.352a3.8 3.8 0 01-.73-.655 4.4 4.4 0 01-.88-1.396 3.8 3.8 0 01-.107-.378l.352-.352a1.951 1.951 0 012.762 0h-.045z"
-        fill="#58CD04"
-      />
-      <Path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M9.974 8.788a6 6 0 01-.588.553 5.6 5.6 0 01-.602.372c-.18.086-.373.15-.757.278l-2.028.676a.5.5 0 01-.54-.127.5.5 0 01-.127-.54l.676-2.027c.128-.385.192-.577.278-.758a5 5 0 01.372-.602 6 6 0 01.553-.588L10.7 2.538a4.4 4.4 0 001.088 1.674 4.4 4.4 0 001.674 1.088L9.974 8.788z"
-        fill="#58CD04"
-      />
-      <Path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M13.691 13.691c.976-.977.976-2.548.976-5.691 0-1.032 0-1.895-.035-2.623l-4.241 4.241c-.234.235-.41.41-.608.565a5.3 5.3 0 01-.75.363c-.227.108-.566.187-.88.279l-5.456 1.782a1.5 1.5 0 01-1.64-.355 1.5 1.5 0 01-.361-1.637l1.82-5.399c.293-.879.371-1.116.463-1.33.153-.365.357-.704.604-.952.15-.157.34-.332.576-.567L7.976 1.368C7.248 1.333 6.385 1.333 5.333 1.333c-3.143 0-4.714 0-5.69.977C.666 3.287.666 4.857.666 8c0 3.143 0 4.714.976 5.69.977.977 2.548.977 5.691.977 3.143 0 4.714 0 5.69-.976h.668z"
-        fill="#58CD04"
       />
     </Svg>
   );
@@ -264,63 +211,25 @@ const TRAIL_UNITS: TrailUnit[] = [
 
 // ─── Components ──────────────────────────────────────────────────────────────
 
-function TopSection({ topInset }: { topInset: number }) {
+function AllSubjectsButton() {
   return (
-    <View style={[styles.topSection, { paddingTop: topInset }]}>
-      {/* Header row */}
-      <View style={styles.headerRow}>
-        <View style={styles.trailInfo}>
-          <View style={styles.trailActiveLabel}>
-            <Text style={styles.trailActiveLabelText}>Trilha Ativa</Text>
-          </View>
-          <View style={styles.trailNameRow}>
-            <Text style={styles.trailName}>ENEM 2024</Text>
-            <ChevronDownIcon />
-          </View>
+    <Pressable
+      style={({ pressed }) => [
+        styles.allSubjectsButton,
+        pressed && { opacity: 0.9 },
+      ]}
+    >
+      <View style={styles.allSubjectsLeft}>
+        <View style={styles.allSubjectsIcon}>
+          <AllSubjectsIcon />
         </View>
-
-        <View style={styles.headerBadges}>
-          {/* Edit toggle */}
-          <View style={styles.bioToggle}>
-            <EditIcon />
-            <View style={styles.toggleTrack}>
-              <View style={styles.toggleThumb} />
-            </View>
-          </View>
-
-          {/* Fire badge */}
-          <View style={styles.badgeOrange}>
-            <FireIcon />
-            <Text style={styles.badgeOrangeText}>12</Text>
-          </View>
-
-          {/* Leaf badge */}
-          <View style={styles.badgeGreen}>
-            <LeafIcon />
-            <Text style={styles.badgeGreenText}>2.4k</Text>
-          </View>
+        <View style={styles.allSubjectsText}>
+          <Text style={styles.allSubjectsTitle}>Todas as Matérias</Text>
+          <Text style={styles.allSubjectsSubtitle}>Ver toda a trilha</Text>
         </View>
       </View>
-
-      {/* All Subjects button */}
-      <Pressable
-        style={({ pressed }) => [
-          styles.allSubjectsButton,
-          pressed && { opacity: 0.9 },
-        ]}
-      >
-        <View style={styles.allSubjectsLeft}>
-          <View style={styles.allSubjectsIcon}>
-            <AllSubjectsIcon />
-          </View>
-          <View style={styles.allSubjectsText}>
-            <Text style={styles.allSubjectsTitle}>Todas as Matérias</Text>
-            <Text style={styles.allSubjectsSubtitle}>Ver toda a trilha</Text>
-          </View>
-        </View>
-        <ChevronDownIcon />
-      </Pressable>
-    </View>
+      <ChevronDownIcon />
+    </Pressable>
   );
 }
 
@@ -548,7 +457,9 @@ export default function TrilhaScreen() {
 
   return (
     <View style={styles.container}>
-      <TopSection topInset={insets.top} />
+      <TrailHeader toggleOn>
+        <AllSubjectsButton />
+      </TrailHeader>
 
       <ScrollView
         style={styles.scrollView}
@@ -575,128 +486,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 40,
-  },
-
-  // ─── Top Section ──────────────────────────────────────────────────────────
-  topSection: {
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(239, 236, 236, 0.5)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 24,
-    paddingTop: 12,
-  },
-  trailInfo: {
-    gap: 2,
-  },
-  trailActiveLabel: {
-    backgroundColor: "rgba(240, 240, 240, 0.4)",
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    alignSelf: "flex-start",
-  },
-  trailActiveLabelText: {
-    fontWeight: "900",
-    fontSize: 10,
-    lineHeight: 10,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    color: "#6B6B6B",
-  },
-  trailNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 2,
-  },
-  trailName: {
-    fontWeight: "900",
-    fontSize: 16,
-    lineHeight: 24,
-    letterSpacing: -0.4,
-    textTransform: "uppercase",
-    color: "#2B2B2B",
-  },
-  headerBadges: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 11,
-  },
-  bioToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(88, 205, 4, 0.1)",
-    borderRadius: 16,
-    paddingHorizontal: 9,
-    paddingVertical: 9,
-    borderWidth: 1,
-    borderColor: "rgba(88, 205, 4, 0.3)",
-  },
-  toggleTrack: {
-    width: 32,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#58CD04",
-    justifyContent: "center",
-    paddingHorizontal: 2,
-  },
-  toggleThumb: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#FFFFFF",
-    alignSelf: "flex-end",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  badgeOrange: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 150, 0, 0.1)",
-    borderRadius: 16,
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: "rgba(255, 150, 0, 0.2)",
-  },
-  badgeOrangeText: {
-    fontWeight: "900",
-    fontSize: 12,
-    lineHeight: 16,
-    color: "#FF9600",
-  },
-  badgeGreen: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(88, 205, 4, 0.1)",
-    borderRadius: 16,
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: "rgba(88, 205, 4, 0.2)",
-  },
-  badgeGreenText: {
-    fontWeight: "900",
-    fontSize: 12,
-    lineHeight: 16,
-    color: "#58CD04",
   },
 
   // ─── All Subjects Button ──────────────────────────────────────────────────
