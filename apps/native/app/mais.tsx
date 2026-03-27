@@ -125,10 +125,11 @@ type MenuItem = {
   icon: React.ReactNode;
   color?: string;
   trailing?: React.ReactNode;
+  route?: string;
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: "perfil", label: "Perfil", icon: <PerfilIcon />, trailing: <ChevronRight /> },
+  { id: "perfil", label: "Perfil", icon: <PerfilIcon />, trailing: <ChevronRight />, route: "/(drawer)/profile" },
   { id: "progresso", label: "Progresso", icon: <ProgressoIcon />, trailing: <ChevronRight /> },
   { id: "simulados", label: "Simulados", icon: <SimuladosIcon />, trailing: <ChevronRight /> },
   { id: "flashcards", label: "Flashcards", icon: <FlashcardsIcon />, trailing: <ChevronRight /> },
@@ -152,9 +153,9 @@ const SECONDARY_ITEMS: MenuItem[] = [
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-function MenuRow({ item }: { item: MenuItem }) {
+function MenuRow({ item, onPress }: { item: MenuItem; onPress?: () => void }) {
   return (
-    <Pressable style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.7 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.7 }]}>
       {item.icon}
       <Text style={[styles.menuLabel, item.color ? { color: item.color } : undefined]}>{item.label}</Text>
       {item.trailing && <View style={styles.menuTrailing}>{item.trailing}</View>}
@@ -183,7 +184,11 @@ export default function MaisScreen() {
         {/* Menu items */}
         <View style={styles.menuList}>
           {MENU_ITEMS.map((item) => (
-            <MenuRow key={item.id} item={item} />
+            <MenuRow
+              key={item.id}
+              item={item}
+              onPress={item.route ? () => router.push(item.route as any) : undefined}
+            />
           ))}
 
           {/* Separator */}
