@@ -149,7 +149,7 @@ function MoreTabIcon() { return <Svg width={24} height={24} viewBox="0 0 24 24" 
 
 // ─── Components ──────────────────────────────────────────────────────────────
 
-function WeeklySimuladoCard() {
+function WeeklySimuladoCard({ onStart }: { onStart: () => void }) {
   return (
     <View style={styles.weeklyCard}>
       {/* Badge */}
@@ -184,7 +184,7 @@ function WeeklySimuladoCard() {
         </View>
 
         {/* CTA */}
-        <Pressable style={({ pressed }) => [styles.greenCTA, pressed && { opacity: 0.9 }]}>
+        <Pressable style={({ pressed }) => [styles.greenCTA, pressed && { opacity: 0.9 }]} onPress={onStart}>
           <Text style={styles.greenCTAText}>COMEÇAR AGORA</Text>
           <PlayIcon />
         </Pressable>
@@ -301,6 +301,7 @@ function BottomTabBar({ bottomInset }: { bottomInset: number }) {
 
 export default function SimuladosScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   return (
     <View style={styles.container}>
@@ -321,7 +322,7 @@ export default function SimuladosScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Weekly Simulado */}
         <View style={styles.section}>
-          <WeeklySimuladoCard />
+          <WeeklySimuladoCard onStart={() => router.push("/(drawer)/questao-simulado" as any)} />
         </View>
 
         {/* Reforço de Base */}
