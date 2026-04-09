@@ -17,6 +17,14 @@ function StackLayout() {
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ title: "Modal", presentation: "modal" }} />
       <Stack.Screen
+        name="materias"
+        options={{
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
         name="mais"
         options={{
           headerShown: false,

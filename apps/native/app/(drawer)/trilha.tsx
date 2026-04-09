@@ -212,12 +212,14 @@ const TRAIL_UNITS: TrailUnit[] = [
 // ─── Components ──────────────────────────────────────────────────────────────
 
 function AllSubjectsButton() {
+  const router = useRouter();
   return (
     <Pressable
       style={({ pressed }) => [
         styles.allSubjectsButton,
         pressed && { opacity: 0.9 },
       ]}
+      onPress={() => router.push("/materias" as any)}
     >
       <View style={styles.allSubjectsLeft}>
         <View style={styles.allSubjectsIcon}>
