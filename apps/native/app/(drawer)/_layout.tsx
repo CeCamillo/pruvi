@@ -114,6 +114,13 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="flashcards"
+        options={{
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
         name="questao-simulado"
         options={{
           headerShown: false,

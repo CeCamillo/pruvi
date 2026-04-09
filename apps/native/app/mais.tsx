@@ -132,7 +132,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: "perfil", label: "Perfil", icon: <PerfilIcon />, trailing: <ChevronRight />, route: "/(drawer)/profile" },
   { id: "progresso", label: "Progresso", icon: <ProgressoIcon />, trailing: <ChevronRight />, route: "/(drawer)/progresso" },
   { id: "simulados", label: "Simulados", icon: <SimuladosIcon />, trailing: <ChevronRight />, route: "/(drawer)/simulados" },
-  { id: "flashcards", label: "Flashcards", icon: <FlashcardsIcon />, trailing: <ChevronRight /> },
+  { id: "flashcards", label: "Flashcards", icon: <FlashcardsIcon />, trailing: <ChevronRight />, route: "/(drawer)/flashcards" },
   {
     id: "sons",
     label: "Sons",
