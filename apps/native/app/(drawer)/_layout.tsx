@@ -114,6 +114,13 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="encontre-amigos"
+        options={{
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
         name="configurar-roleta"
         options={{
           headerShown: false,

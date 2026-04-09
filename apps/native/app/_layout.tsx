@@ -25,6 +25,14 @@ function StackLayout() {
         }}
       />
       <Stack.Screen
+        name="permissao-contatos"
+        options={{
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
         name="mais"
         options={{
           headerShown: false,

@@ -166,7 +166,7 @@ const SUGGESTIONS = [
 
 // ─── Components ──────────────────────────────────────────────────────────────
 
-function InviteCard() {
+function InviteCard({ onFindFriends }: { onFindFriends: () => void }) {
   return (
     <View style={styles.inviteCard}>
       <View style={styles.inviteTextArea}>
@@ -177,7 +177,10 @@ function InviteCard() {
       </View>
 
       <View style={styles.inviteActions}>
-        <Pressable style={({ pressed }) => [styles.findButton, pressed && { opacity: 0.9 }]}>
+        <Pressable
+          style={({ pressed }) => [styles.findButton, pressed && { opacity: 0.9 }]}
+          onPress={onFindFriends}
+        >
           <PersonAddIcon />
           <Text style={styles.findButtonText}>Encontrar Amigos</Text>
         </Pressable>
@@ -312,6 +315,7 @@ function BottomTabBar({ bottomInset }: { bottomInset: number }) {
 
 export default function AmigosScreen() {
   const insets = useSafeAreaInsets();
+  const mainRouter = useRouter();
 
   return (
     <View style={styles.container}>
@@ -327,7 +331,7 @@ export default function AmigosScreen() {
       >
         {/* Invite Card */}
         <View style={styles.section}>
-          <InviteCard />
+          <InviteCard onFindFriends={() => mainRouter.push("/(drawer)/encontre-amigos" as any)} />
         </View>
 
         {/* Mission Card */}
