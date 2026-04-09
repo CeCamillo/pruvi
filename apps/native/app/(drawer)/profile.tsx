@@ -219,7 +219,7 @@ function AtividadeSection() {
   );
 }
 
-function TrilhaAtivaSection() {
+function TrilhaAtivaSection({ onAlterar }: { onAlterar: () => void }) {
   return (
     <View style={styles.trilhaAtivaCard}>
       <View style={styles.trilhaAtivaHeader}>
@@ -232,7 +232,7 @@ function TrilhaAtivaSection() {
           <Text style={styles.trilhaAtivaName}>ENEM 2024</Text>
           <Text style={styles.trilhaAtivaSub}>Medicina</Text>
         </View>
-        <Pressable style={styles.alterarBtn}>
+        <Pressable style={styles.alterarBtn} onPress={onAlterar}>
           <Text style={styles.alterarBtnText}>ALTERAR</Text>
         </Pressable>
       </View>
@@ -303,7 +303,7 @@ export default function ProfileScreen() {
         <View style={styles.sections}>
           <DestaquesSection />
           <AtividadeSection />
-          <TrilhaAtivaSection />
+          <TrilhaAtivaSection onAlterar={() => router.push("/(drawer)/selecao-trilha" as any)} />
           <PremiumCard />
         </View>
       </ScrollView>

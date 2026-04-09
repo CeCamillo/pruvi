@@ -107,6 +107,13 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="selecao-trilha"
+        options={{
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
         name="simulados"
         options={{
           headerShown: false,
