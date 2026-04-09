@@ -32,6 +32,14 @@ function StackLayout() {
           animation: "slide_from_bottom",
         }}
       />
+      <Stack.Screen
+        name="filtro-assuntos"
+        options={{
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+        }}
+      />
     </Stack>
   );
 }
