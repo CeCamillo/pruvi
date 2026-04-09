@@ -114,6 +114,13 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="questao-simulado"
+        options={{
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
         name="simulados"
         options={{
           headerShown: false,
