@@ -156,6 +156,34 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="inserir-telefone"
+        options={{
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
+        name="inserir-codigo-sms"
+        options={{
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
+        name="contatos-na-pruvi"
+        options={{
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
+        name="procurar-amigos"
+        options={{
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
         name="simulados"
         options={{
           headerShown: false,

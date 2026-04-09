@@ -109,7 +109,10 @@ export default function EncontreAmigosScreen() {
           </Pressable>
 
           {/* Buscar */}
-          <Pressable style={({ pressed }) => [styles.optionCard, pressed && { opacity: 0.8 }]}>
+          <Pressable
+            style={({ pressed }) => [styles.optionCard, pressed && { opacity: 0.8 }]}
+            onPress={() => router.push("/(drawer)/procurar-amigos" as any)}
+          >
             <SearchUserIcon />
             <View style={styles.optionInfo}>
               <Text style={styles.optionTitle}>Buscar por nome</Text>
@@ -119,7 +122,10 @@ export default function EncontreAmigosScreen() {
           </Pressable>
 
           {/* Link */}
-          <Pressable style={({ pressed }) => [styles.optionCard, pressed && { opacity: 0.8 }]}>
+          <Pressable
+            style={({ pressed }) => [styles.optionCard, pressed && { opacity: 0.8 }]}
+            onPress={() => router.push("/compartilhar-perfil" as any)}
+          >
             <LinkIcon />
             <View style={styles.optionInfo}>
               <Text style={styles.optionTitle}>Link do seu perfil</Text>

@@ -48,6 +48,14 @@ function StackLayout() {
           animation: "slide_from_bottom",
         }}
       />
+      <Stack.Screen
+        name="compartilhar-perfil"
+        options={{
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+        }}
+      />
     </Stack>
   );
 }
