@@ -73,8 +73,7 @@ export default function RoletaQuizScreen() {
         }
       }}
       onSubmit={() => {
-        // TODO: navigate to result screen
-        router.back();
+        router.push("/(drawer)/roleta-result" as any);
       }}
       onClose={() => router.back()}
     />

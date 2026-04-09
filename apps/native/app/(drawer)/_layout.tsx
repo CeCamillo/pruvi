@@ -114,6 +114,13 @@ function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="roleta-result"
+        options={{
+          headerShown: false,
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
         name="roleta-quiz"
         options={{
           headerShown: false,
