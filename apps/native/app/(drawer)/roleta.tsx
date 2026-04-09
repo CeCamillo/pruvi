@@ -273,6 +273,7 @@ function BottomTabBar({ bottomInset }: { bottomInset: number }) {
 
 export default function RoletaScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   return (
     <View style={styles.container}>
@@ -299,6 +300,7 @@ export default function RoletaScreen() {
               styles.girarButton,
               pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
             ]}
+            onPress={() => router.push("/(drawer)/roleta-quiz" as any)}
           >
             <DiceIcon />
             <Text style={styles.girarButtonText}>GIRAR AGORA</Text>
