@@ -311,6 +311,7 @@ export default function RoletaScreen() {
               styles.personalizarButton,
               pressed && { opacity: 0.8 },
             ]}
+            onPress={() => router.push("/(drawer)/configurar-roleta" as any)}
           >
             <SettingsIcon />
             <Text style={styles.personalizarButtonText}>Personalizar Matérias</Text>
