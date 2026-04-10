@@ -1,14 +1,5 @@
 import { relations } from "drizzle-orm";
-import { dailySession } from "./daily-sessions";
-import { reviewLog } from "./review-log";
-import {
-  integer,
-  pgTable,
-  text,
-  timestamp,
-  boolean,
-  index,
-} from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -16,11 +7,6 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
-  // Gamification columns (managed by Pruvi, ignored by Better Auth)
-  lives: integer("lives").default(5).notNull(),
-  livesResetAt: timestamp("lives_reset_at"),
-  totalXp: integer("total_xp").default(0).notNull(),
-  currentLevel: integer("current_level").default(1).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -90,8 +76,6 @@ export const verification = pgTable(
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
-  reviewLogs: many(reviewLog),
-  dailySessions: many(dailySession),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({

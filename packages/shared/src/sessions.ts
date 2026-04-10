@@ -1,24 +1,22 @@
 import { z } from "zod";
-import { QuestionModeSchema, QuestionSchema } from "./questions";
 
-/** POST /sessions/start — request body */
-export const StartSessionBodySchema = z.object({
-  mode: QuestionModeSchema.default("all"),
+export const dailySessionSchema = z.object({
+  id: z.number(),
+  date: z.string(),
+  questionsAnswered: z.number(),
+  questionsCorrect: z.number(),
+  completedAt: z.string().nullable(),
 });
 
-export type StartSessionBody = z.infer<typeof StartSessionBodySchema>;
+export type DailySession = z.infer<typeof dailySessionSchema>;
 
-/** Session as returned to the client */
-export const SessionSchema = z.object({
-  id: z.number().int(),
-  userId: z.string(),
-  status: z.enum(["active", "completed"]),
-  questionCount: z.number().int(),
-  correctCount: z.number().int(),
-  completedAt: z.coerce.date().nullable(),
-  createdAt: z.coerce.date(),
+export const sessionStatsSchema = z.object({
+  currentStreak: z.number(),
+  longestStreak: z.number(),
+  totalSessions: z.number(),
 });
 
+export type SessionStats = z.infer<typeof sessionStatsSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 
 /** POST /sessions/start — response */

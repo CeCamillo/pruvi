@@ -1,61 +1,58 @@
+import { type Result, ok } from "neverthrow";
 import { z } from "zod";
 
-export type QualityScore = 0 | 1 | 2 | 3 | 4 | 5;
-
-export interface SM2State {
-  easinessFactor: number; // starts at 2.5, never < 1.3
-  interval: number; // days until next review; 0 = not yet scheduled
-  repetitions: number; // consecutive correct reviews
-  nextReviewAt: Date; // absolute date of next review
-}
-
-export const SM2StateSchema = z.object({
-  easinessFactor: z.number().min(1.3),
-  interval: z.number().int().min(0),
-  repetitions: z.number().int().min(0),
-  nextReviewAt: z.coerce.date(),
+export const sm2InputSchema = z.object({
+  quality: z.number().min(0).max(5),
+  repetitions: z.number().min(0),
+  easeFactor: z.number().min(1.3),
+  interval: z.number().min(0),
 });
 
-export const INITIAL_SM2_STATE: SM2State = {
-  easinessFactor: 2.5,
-  interval: 0,
-  repetitions: 0,
-  nextReviewAt: new Date(), // overwritten on first review
-};
+export type Sm2Input = z.infer<typeof sm2InputSchema>;
 
-function updateEF(ef: number, quality: QualityScore): number {
-  const newEF = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-  return Math.max(1.3, newEF);
-}
+export const sm2OutputSchema = z.object({
+  repetitions: z.number(),
+  easeFactor: z.number(),
+  interval: z.number(),
+  nextReviewAt: z.string(),
+});
 
-export function calculateSM2(
-  state: SM2State,
-  quality: QualityScore,
-  now: Date = new Date()
-): SM2State {
-  const newEF = updateEF(state.easinessFactor, quality);
+export type Sm2Output = z.infer<typeof sm2OutputSchema>;
 
-  let newRepetitions: number;
-  let newInterval: number;
+export function calculateSm2(input: Sm2Input): Result<Sm2Output, never> {
+  const { quality, repetitions, easeFactor, interval } = input;
+
+  let nextRepetitions: number;
+  let nextInterval: number;
+  let nextEaseFactor: number;
 
   if (quality < 3) {
-    newRepetitions = 0;
-    newInterval = 1;
-  } else if (state.repetitions === 0) {
-    newRepetitions = 1;
-    newInterval = 1;
-  } else if (state.repetitions === 1) {
-    newRepetitions = 2;
-    newInterval = 6;
+    // Wrong answer: reset progress, ease unchanged
+    nextRepetitions = 0;
+    nextInterval = 1;
+    nextEaseFactor = easeFactor;
   } else {
-    newRepetitions = state.repetitions + 1;
-    newInterval = Math.floor(state.interval * newEF);
+    // Correct answer: advance interval
+    if (repetitions === 0) {
+      nextInterval = 1;
+    } else if (repetitions === 1) {
+      nextInterval = 6;
+    } else {
+      nextInterval = Math.round(interval * easeFactor);
+    }
+    nextRepetitions = repetitions + 1;
+    nextEaseFactor = Math.max(
+      1.3,
+      easeFactor + 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02),
+    );
   }
 
-  return {
-    easinessFactor: newEF,
-    interval: newInterval,
-    repetitions: newRepetitions,
-    nextReviewAt: new Date(now.getTime() + newInterval * 86_400_000),
-  };
+  const nextReviewAt = new Date(Date.now() + nextInterval * 24 * 60 * 60 * 1000).toISOString();
+
+  return ok({
+    repetitions: nextRepetitions,
+    easeFactor: nextEaseFactor,
+    interval: nextInterval,
+    nextReviewAt,
+  });
 }

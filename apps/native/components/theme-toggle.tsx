@@ -15,7 +15,7 @@ export function ThemeToggle() {
     <Pressable
       onPress={() => {
         if (Platform.OS === "ios") {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
         toggleTheme();
       }}

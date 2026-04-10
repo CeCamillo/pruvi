@@ -13,7 +13,7 @@ export const auth = betterAuth({
   }),
   trustedOrigins: [
     env.CORS_ORIGIN,
-    "pruvi://",
+    "mybettertapp://",
     ...(env.NODE_ENV === "development"
       ? ["exp://", "exp://**", "exp://192.168.*.*:*/**", "http://localhost:8081"]
       : []),
@@ -21,8 +21,6 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
-  secret: env.BETTER_AUTH_SECRET,
-  baseURL: env.BETTER_AUTH_URL,
   advanced: {
     defaultCookieAttributes: {
       sameSite: "none",

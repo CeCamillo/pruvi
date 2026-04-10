@@ -7,14 +7,55 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { AppThemeProvider } from "@/contexts/app-theme-context";
 
 export const unstable_settings = {
-  initialRouteName: "(drawer)",
+  initialRouteName: "(onboarding)",
 };
 
 function StackLayout() {
   return (
     <Stack screenOptions={{}}>
+      <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ title: "Modal", presentation: "modal" }} />
+      <Stack.Screen
+        name="materias"
+        options={{
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="permissao-contatos"
+        options={{
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="mais"
+        options={{
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="filtro-assuntos"
+        options={{
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="compartilhar-perfil"
+        options={{
+          headerShown: false,
+          presentation: "transparentModal",
+          animation: "slide_from_bottom",
+        }}
+      />
     </Stack>
   );
 }

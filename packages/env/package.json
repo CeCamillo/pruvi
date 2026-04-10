@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@pruvi/config": "workspace:*",
-    "@types/bun": "catalog:",
+    "@types/node": "^22.13.14",
     "typescript": "catalog:"
   }
 }
