@@ -1,72 +1,113 @@
-# pruvi
+# Pruvi
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Fastify, and more.
+Monorepo with a **Fastify** API server and a **React Native (Expo)** mobile app.
 
-## Features
+## Prerequisites
 
-- **TypeScript** - For type safety and improved developer experience
-- **React Native** - Build mobile apps using React
-- **Expo** - Tools for React Native development
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Fastify** - Fast, low-overhead web framework
-- **Bun** - Runtime environment
-- **Drizzle** - TypeScript-first ORM
-- **PostgreSQL** - Database engine
-- **Authentication** - Better-Auth
-- **Turborepo** - Optimized monorepo build system
+- [Node.js](https://nodejs.org/) (v20+)
+- [pnpm](https://pnpm.io/) (v10+) — `npm i -g pnpm`
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
 ## Getting Started
 
-First, install the dependencies:
+### 1. Install dependencies
 
-```bash
+```sh
 pnpm install
 ```
 
-## Database Setup
+### 2. Set up environment variables
 
-This project uses PostgreSQL with Drizzle ORM.
+**Server** — copy the example and generate a secret:
 
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
-
-3. Apply the schema to your database:
-
-```bash
-pnpm run db:push
+```sh
+cp apps/server/.env.example apps/server/.env
 ```
 
-Then, run the development server:
+Open `apps/server/.env` and replace `BETTER_AUTH_SECRET` with a random string (min 32 chars):
 
-```bash
-pnpm run dev
+```sh
+# generates and prints a secret you can paste
+openssl rand -base64 32
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
-Use the Expo Go app to run the mobile application.
-The API is running at [http://localhost:3000](http://localhost:3000).
+The rest of the defaults work out of the box with the Docker setup below.
+
+**Native app** — copy the example and set your LAN IP:
+
+```sh
+cp apps/native/.env.example apps/native/.env
+```
+
+Open `apps/native/.env` and replace `192.168.x.x` with your machine's local IP:
+
+```sh
+# macOS
+ipconfig getifaddr en0
+
+# Linux
+hostname -I | awk '{print $1}'
+```
+
+### 3. Start the database and Redis
+
+```sh
+pnpm db:start
+```
+
+This runs Postgres 17 and Redis 7 via Docker Compose.
+
+### 4. Push the database schema
+
+```sh
+pnpm db:push
+```
+
+### 5. Run the server
+
+```sh
+pnpm dev:server
+```
+
+The API starts at `http://localhost:3000`.
+
+### 6. Run the mobile app
+
+In a separate terminal:
+
+```sh
+pnpm dev:native
+```
+
+Scan the QR code with Expo Go on your phone (make sure your phone is on the same Wi-Fi network).
+
+## Useful Commands
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start everything (server + native) |
+| `pnpm dev:server` | Start the API server |
+| `pnpm dev:worker` | Start the background worker |
+| `pnpm dev:native` | Start the Expo dev server |
+| `pnpm db:start` | Start Postgres & Redis containers |
+| `pnpm db:stop` | Stop containers (keeps data) |
+| `pnpm db:down` | Stop containers and remove volumes |
+| `pnpm db:push` | Push schema changes to the database |
+| `pnpm db:studio` | Open Drizzle Studio (DB GUI) |
+| `pnpm db:seed` | Seed the database |
+| `pnpm build` | Build all packages |
+| `pnpm check-types` | Type-check all packages |
 
 ## Project Structure
 
 ```
-pruvi/
-├── apps/
-│   ├── web/         # Frontend application ()
-│   ├── native/      # Mobile application (React Native, Expo)
-│   └── server/      # Backend API (Fastify)
-├── packages/
-│   ├── auth/        # Authentication configuration & logic
-│   └── db/          # Database schema & queries
+apps/
+  server/      Fastify API (Bun runtime)
+  native/      React Native app (Expo)
+packages/
+  auth/        Authentication (Better Auth)
+  db/          Database schema & migrations (Drizzle + Postgres)
+  env/         Environment variable validation (t3-env)
+  shared/      Shared types and contracts
+  config/      Shared TypeScript config
 ```
-
-## Available Scripts
-
-- `pnpm run dev`: Start all applications in development mode
-- `pnpm run build`: Build all applications
-- `pnpm run dev:server`: Start only the server
-- `pnpm run check-types`: Check TypeScript types across all apps
-- `pnpm run dev:native`: Start the React Native/Expo development server
-- `pnpm run db:push`: Push schema changes to database
-- `pnpm run db:generate`: Generate database client/types
-- `pnpm run db:migrate`: Run database migrations
-- `pnpm run db:studio`: Open database studio UI

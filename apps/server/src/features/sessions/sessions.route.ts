@@ -59,17 +59,18 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request) => {
       const cacheKey = `session-today:${request.userId}`;
 
-      const cached = await fastify.cache.get(cacheKey);
+      const cached = await fastify.cache.get<{ session: unknown }>(cacheKey);
       if (cached) {
         return successResponse(cached);
       }
 
       const result = await service.getTodaySession(request.userId);
-      const response = unwrapResult(result);
+      const session = unwrapResult(result).data;
+      const payload = { session };
 
-      await fastify.cache.set(cacheKey, response.data, SESSION_CACHE_TTL);
+      await fastify.cache.set(cacheKey, payload, SESSION_CACHE_TTL);
 
-      return response;
+      return successResponse(payload);
     }
   );
 
@@ -97,7 +98,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         questionCount,
         correctCount
       );
-      const response = unwrapResult(result);
+      const session = unwrapResult(result).data;
 
       // Invalidate caches that depend on session completion
       await Promise.all([
@@ -119,7 +120,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         );
       }
 
-      return response;
+      return successResponse({ session });
     }
   );
 };
