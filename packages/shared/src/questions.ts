@@ -12,21 +12,23 @@ export const questionSchema = z.object({
 
 export type Question = z.infer<typeof questionSchema>;
 
-export const answerRequestSchema = z.object({
-  selectedOptionIndex: z.number().min(0).max(4),
-});
+// --- Difficulty ---
 
-export type AnswerRequest = z.infer<typeof answerRequestSchema>;
+export const difficultySchema = z.enum(["easy", "medium", "hard"]);
+export type Difficulty = z.infer<typeof difficultySchema>;
 
-export const answerResponseSchema = z.object({
-  correct: z.boolean(),
-  correctOptionIndex: z.number(),
-  reviewLog: z.object({
-    easeFactor: z.number(),
-    interval: z.number(),
-    repetitions: z.number(),
-    nextReviewAt: z.string(),
-  }),
-});
+/** Map DB integer (1-5) to Difficulty label. 1-2 → easy, 3 → medium, 4-5 → hard. */
+export function difficultyFromNumber(n: number): Difficulty {
+  if (n <= 2) return "easy";
+  if (n === 3) return "medium";
+  return "hard";
+}
 
-export type AnswerResponse = z.infer<typeof answerResponseSchema>;
+/** SM-2 quality score: 0-5 scale used by the review service. */
+export type QualityScore = 0 | 1 | 2 | 3 | 4 | 5;
+
+// --- Client-safe question (no correctOptionIndex) ---
+
+export const clientQuestionSchema = questionSchema.omit({ correctOptionIndex: true });
+
+export type ClientQuestion = z.infer<typeof clientQuestionSchema>;
