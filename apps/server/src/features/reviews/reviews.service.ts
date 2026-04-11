@@ -1,10 +1,10 @@
 import { err, ok, type Result } from "neverthrow";
 import {
-  calculateSM2,
+  calculateSm2,
   INITIAL_SM2_STATE,
   calculateXpForAnswer,
+  difficultyFromNumber,
   type QualityScore,
-  type Difficulty,
 } from "@pruvi/shared";
 import type { AppError } from "../../utils/errors";
 import { NotFoundError, ValidationError } from "../../utils/errors";
@@ -45,31 +45,31 @@ export class ReviewsService {
     const latestReview = await this.repo.findLatestReview(userId, questionId);
     const previousState = latestReview
       ? {
-          easinessFactor: Number(latestReview.easinessFactor),
-          interval: latestReview.interval,
+          quality,
           repetitions: latestReview.repetitions,
-          nextReviewAt: latestReview.nextReviewAt,
+          easeFactor: Number(latestReview.easinessFactor),
+          interval: latestReview.interval,
         }
-      : INITIAL_SM2_STATE;
+      : { ...INITIAL_SM2_STATE, quality };
 
     // 5. Calculate new SM-2 state
-    const newState = calculateSM2(previousState, quality);
+    const newState = calculateSm2(previousState)._unsafeUnwrap();
 
     // 6. Insert new review_log row
     await this.repo.insertReview({
       userId,
       questionId,
       quality,
-      easinessFactor: newState.easinessFactor.toFixed(2),
+      easinessFactor: newState.easeFactor.toFixed(2),
       interval: newState.interval,
       repetitions: newState.repetitions,
-      nextReviewAt: newState.nextReviewAt,
+      nextReviewAt: new Date(newState.nextReviewAt),
     });
 
     // 6b. Award XP
     const xpAwarded = calculateXpForAnswer(
       correct,
-      q.difficulty as Difficulty
+      difficultyFromNumber(q.difficulty)
     );
     if (xpAwarded > 0) {
       await this.repo.awardXp(userId, xpAwarded);
