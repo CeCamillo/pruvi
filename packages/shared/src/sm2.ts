@@ -10,6 +10,14 @@ export const sm2InputSchema = z.object({
 
 export type Sm2Input = z.infer<typeof sm2InputSchema>;
 
+/** Default SM-2 starting state for first-time reviews. */
+export const INITIAL_SM2_STATE: Sm2Input = {
+  quality: 0,
+  repetitions: 0,
+  easeFactor: 2.5,
+  interval: 0,
+};
+
 export const sm2OutputSchema = z.object({
   repetitions: z.number(),
   easeFactor: z.number(),
