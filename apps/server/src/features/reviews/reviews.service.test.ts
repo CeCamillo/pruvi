@@ -17,10 +17,10 @@ const service = new ReviewsService(mockRepo as any);
 const USER_ID = "user-1";
 const QUESTION_ID = 42;
 
-const makeQuestion = (overrides?: Partial<{ difficulty: string; correctOptionIndex: number }>) => ({
+const makeQuestion = (overrides?: Partial<{ difficulty: number; correctOptionIndex: number }>) => ({
   id: QUESTION_ID,
   correctOptionIndex: 2,
-  difficulty: "medium",
+  difficulty: 3,
   ...overrides,
 });
 
@@ -39,7 +39,7 @@ beforeEach(() => {
 
 describe("ReviewsService.answerQuestion", () => {
   it("correct answer: returns correct=true, SM-2 quality=4, XP awarded based on difficulty, lives unchanged", async () => {
-    mockRepo.findQuestionById.mockResolvedValue(makeQuestion({ difficulty: "hard" }));
+    mockRepo.findQuestionById.mockResolvedValue(makeQuestion({ difficulty: 4 }));
 
     const result = await service.answerQuestion(USER_ID, QUESTION_ID, 2);
 
@@ -129,6 +129,7 @@ describe("ReviewsService.answerQuestion", () => {
     // With quality=4 on initial state (rep=0): newInterval=1, newRepetitions=1
     expect(firstCall.repetitions).toBe(1);
     expect(firstCall.interval).toBe(1);
+    expect(firstCall.easinessFactor).toBe("2.50");
 
     // Subsequent review: latest review exists
     vi.clearAllMocks();
@@ -153,7 +154,7 @@ describe("ReviewsService.answerQuestion", () => {
     expect(secondCall.interval).toBeGreaterThan(1);
     // EF from prior was 2.60, quality=4 -> newEF = 2.60 + (0.1 - 1*(0.08 + 1*0.02)) = 2.60
     expect(secondCall.easinessFactor).toBe("2.60");
-    expect(secondCall.interval).toBe(Math.floor(6 * 2.6)); // 15
+    expect(secondCall.interval).toBe(Math.round(6 * 2.6)); // 16
   });
 
   it("XP is NOT awarded for wrong answers (repo.awardXp not called)", async () => {

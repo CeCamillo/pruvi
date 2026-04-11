@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { StartSessionBodySchema } from "@pruvi/shared";
+import { startSessionBodySchema, completeSessionBodySchema } from "@pruvi/shared";
 import { SessionsService } from "./sessions.service";
 import { SessionsRepository } from "./sessions.repository";
 import { QuestionsRepository } from "../questions/questions.repository";
@@ -22,7 +22,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     {
       preHandler: [fastify.authenticate],
       schema: {
-        body: StartSessionBodySchema,
+        body: startSessionBodySchema,
       },
     },
     async (request) => {
@@ -83,10 +83,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         params: z.object({
           id: z.coerce.number().int(),
         }),
-        body: z.object({
-          questionCount: z.number().int().min(0),
-          correctCount: z.number().int().min(0),
-        }),
+        body: completeSessionBodySchema,
       },
     },
     async (request) => {
