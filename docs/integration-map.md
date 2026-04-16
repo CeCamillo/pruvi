@@ -1,10 +1,10 @@
 # Pruvi Integration Map
 
-> Last updated: 2026-04-11
+> Last updated: 2026-04-16
 >
 > This document maps every integration between `apps/native` and `apps/server`. All frontend work follows `apps/native/native_architecture.md` — that document is the single source of truth for how the native app is built.
 >
-> **Current status:** Phases 0-1 complete. Phase 2 is next.
+> **Current status:** Phases 0-3 complete. **The core MVP works end-to-end** — users can sign up, start a daily session, answer SM-2 prioritized questions with animated feedback, earn XP, maintain streaks. Phase 4 (Progress & Profile) is next and requires new backend endpoints.
 
 ---
 
@@ -344,247 +344,98 @@ Every phase follows the **new screen checklist** from `native_architecture.md`:
 
 ---
 
-### Phase 2: Service Layer + Hooks + Stores ← NEXT
+### Phase 2: Service Layer + Hooks + Stores ✅
 
-> **Goal:** The full data plumbing exists — every backend endpoint has a typed service function, a Query/Mutation hook, and ephemeral stores are ready. No UI yet — that's Phase 3.
+> **Completed** — PR #4 (`feature/phase2-service-layer`)
 >
-> **Prerequisites:** Phase 1 PR merged. Backend running with seeded questions.
+> Spec: `docs/superpowers/specs/2026-04-11-phase2-service-layer-design.md`
+> Plan: `docs/superpowers/plans/2026-04-11-phase2-service-layer.md`
 
-#### 2.1 — Service Layer
+**What was done:**
 
-All services use `authClient.fetch()` for authenticated requests. Every response is parsed through `@pruvi/shared` Zod schemas.
+- **`lib/api-client.ts`** — Single `apiRequest<T>(path, options, schema)` wrapper around `authClient.$fetch`. Unwraps server's `{ success, data }` envelope, validates response through Zod schema, throws on failure. All authenticated HTTP goes through this.
+- **`services/session.service.ts`** — 7 typed functions covering every existing backend endpoint: `getToday`, `startSession`, `completeSession`, `answerQuestion`, `getLives`, `getXp`, `getStreaks`. Each parses responses through `@pruvi/shared` schemas.
+- **5 TanStack Query hook files:**
+  - `useSessionQuery.ts` — `useTodaySession` (query) + `useStartSession`, `useAnswerQuestion`, `useCompleteSession` (mutations with cache invalidation)
+  - `useLives.ts` (staleTime 30s) / `useXp.ts` (60s) / `useStreaks.ts` (5min default) — per-query staleTimes match server Redis TTLs
+  - `useProfile.ts` — composed hook aggregating xp/streaks/lives into flat object
+- **2 Zustand stores (v5 pattern, actions nested):**
+  - `sessionStore` — `currentQuestionIndex`, `selectedOptionIndex`, `answerState`, `livesRemaining` + actions
+  - `gamificationStore` — `pendingXP`, `streakAnimationTrigger` + actions
+- **Added `@pruvi/shared` as workspace dependency** to native app (was missing from Phase 1).
 
-**`services/auth.service.ts`**
+**Design decisions made:**
 
-```typescript
-login(email, password)      → authClient.signIn.email()
-register(name, email, password) → authClient.signUp.email()
-logout()                    → authClient.signOut()
-```
+- **Authenticated HTTP via `authClient.$fetch`** (not custom fetch wrapper) — Better Auth's Expo plugin already manages session cookies via SecureStore. Single source of truth for auth headers.
+- **Services throw on failure** — TanStack Query's native `error` state handles errors in components. Matches the `login.tsx` pattern from Phase 1.
+- **Query keys align with server Redis cache keys** (`session-today`, `lives`, `xp`, `streaks`) — mutations invalidate the same queries the server invalidates.
+- **Per-query staleTimes match server Redis TTLs** — no point caching longer than server does.
+- **Zustand actions nested under `actions` key** — lets components select state or actions separately to minimize re-renders (v5 best practice).
+- **`selectedOptionIndex: number | null`** instead of `selectedOption: string | null` from the architecture doc draft — backend uses numeric indices 0-3, avoiding conversion bugs.
+- **`streakAnimationTrigger: number` counter** instead of boolean — incrementing counter is robust to rapid-fire triggers.
+- **`sessionStore.reset(initialLives)` takes lives count** — store reads current lives from `useLives()` on screen mount; store doesn't fetch its own data (respects server-state ownership rule).
 
-**`services/session.service.ts`**
+**Deferred to Phase 4:**
 
-| Function | Method | Endpoint | Request schema | Response schema |
-|----------|--------|----------|---------------|-----------------|
-| `getToday()` | GET | `/sessions/today` | — | `TodaySessionResponseSchema` |
-| `startSession(mode)` | POST | `/sessions/start` | `StartSessionBodySchema` | `StartSessionResponseSchema` |
-| `answerQuestion(questionId, selectedOptionIndex)` | POST | `/questions/:questionId/answer` | `AnswerQuestionBodySchema` | `AnswerQuestionResponseSchema` |
-| `completeSession(id, questionCount, correctCount)` | POST | `/sessions/:id/complete` | `CompleteSessionBodySchema` | `CompleteSessionResponseSchema` |
-| `getLives()` | GET | `/users/me/lives` | — | `LivesResponseSchema` |
-| `getXp()` | GET | `/users/me/xp` | — | `XpResponseSchema` |
-| `getStreaks()` | GET | `/streaks` | — | `StreakResponseSchema` |
+- **`services/progress.service.ts`** + `useProgress()` + `useSubjectReviews()` — these depend on backend endpoints (`/users/me/progress`, `/subjects/:slug/reviews`) that don't exist yet. Defer to Phase 4 where we build the endpoints and consumers together.
 
-**`services/progress.service.ts`**
-
-| Function | Method | Endpoint | Response schema |
-|----------|--------|----------|-----------------|
-| `getSubjectStats()` | GET | `/users/me/progress` | `SubjectStatsResponseSchema` (to be defined) |
-| `getReviewHistory(subjectSlug)` | GET | `/subjects/:slug/reviews` | `ReviewHistoryResponseSchema` (to be defined) |
-
-> **Note:** `getSubjectStats` and `getReviewHistory` require **new backend endpoints** (see Phase 4 backend tasks).
-
-#### 2.2 — TanStack Query Hooks
-
-**`hooks/useSessionQuery.ts`** — Session lifecycle
-
-| Hook | Type | Query key | Service call | Cache |
-|------|------|-----------|-------------|-------|
-| `useTodaySession()` | Query | `['session', 'today']` | `sessionService.getToday` | `staleTime: 5min` — pre-generated by BullMQ, no need to refetch constantly |
-| `useStartSession()` | Mutation | invalidates `['session', 'today']` | `sessionService.startSession` | Invalidates session cache on success |
-| `useAnswerQuestion()` | Mutation | invalidates `['lives']`, `['xp']` | `sessionService.answerQuestion` | Invalidates affected gamification caches |
-| `useCompleteSession()` | Mutation | invalidates `['session', 'today']`, `['streaks']`, `['xp']` | `sessionService.completeSession` | Invalidates all post-session caches |
-
-**`hooks/useLives.ts`**
-
-| Hook | Type | Query key | Service call | Cache |
-|------|------|-----------|-------------|-------|
-| `useLives()` | Query | `['lives']` | `sessionService.getLives` | `staleTime: 30s` |
-
-**`hooks/useXp.ts`**
-
-| Hook | Type | Query key | Service call | Cache |
-|------|------|-----------|-------------|-------|
-| `useXp()` | Query | `['xp']` | `sessionService.getXp` | `staleTime: 60s` |
-
-**`hooks/useStreaks.ts`**
-
-| Hook | Type | Query key | Service call | Cache |
-|------|------|-----------|-------------|-------|
-| `useStreaks()` | Query | `['streaks']` | `sessionService.getStreaks` | `staleTime: 5min` |
-
-**`hooks/useProgress.ts`**
-
-| Hook | Type | Query key | Service call | Cache |
-|------|------|-----------|-------------|-------|
-| `useProgress()` | Query | `['progress']` | `progressService.getSubjectStats` | `staleTime: 5min` |
-| `useSubjectReviews(slug)` | Query | `['subject', slug, 'reviews']` | `progressService.getReviewHistory` | `staleTime: 5min` |
-
-**`hooks/useProfile.ts`**
-
-| Hook | Type | Purpose |
-|------|------|---------|
-| `useProfile()` | Composed | Aggregates `useXp()` + `useStreaks()` + `useLives()` into a single profile object |
-
-#### 2.3 — Zustand Stores
-
-Ephemeral client state. Resets when the session ends. **Never persisted to SecureStore. Never used for server data.**
-
-**`stores/sessionStore.ts`**
-
-```typescript
-interface SessionStore {
-  currentQuestionIndex: number
-  selectedOption: string | null
-  answerState: 'idle' | 'correct' | 'wrong'
-  livesRemaining: number
-  actions: {
-    selectOption: (optionId: string) => void
-    submitAnswer: () => void
-    nextQuestion: () => void
-    reset: () => void
-  }
-}
-```
-
-- Drives the Q&A loop in `session/[id].tsx`
-- `selectOption` → sets `selectedOption`, keeps `answerState: 'idle'`
-- `submitAnswer` → triggers `useAnswerQuestion()` mutation, sets `answerState` to `'correct'` or `'wrong'` based on response
-- `nextQuestion` → increments `currentQuestionIndex`, resets `selectedOption` and `answerState` to `'idle'`
-- `reset` → called when navigating away from session
-
-**`stores/gamificationStore.ts`**
-
-```typescript
-interface GamificationStore {
-  pendingXP: number
-  streakAnimationTrigger: boolean
-  actions: {
-    addXP: (amount: number) => void
-    triggerStreakAnimation: () => void
-    flush: () => void
-  }
-}
-```
-
-- `addXP` → accumulates XP earned during session (from `useAnswerQuestion` response `xpAwarded`)
-- `triggerStreakAnimation` → fires on session result screen when streak extends
-- `flush` → resets after animations complete
-
-**Exit criteria:** All services, hooks, and stores exist with correct types. Can be imported and called — not wired to UI yet.
+**Results:** 9 new files, TypeScript compiles cleanly outside legacy archived screens.
 
 ---
 
-### Phase 3: Core Loop Screens
+### Phase 3: Core Loop Screens ✅
 
-> **Goal:** A working study session from Home → Active Session → Result, with animations.
+> **Completed** — PR #5 (`feature/phase3-core-loop-screens`)
+>
+> Spec: `docs/superpowers/specs/2026-04-16-phase3-core-loop-screens-design.md`
+> Plan: `docs/superpowers/plans/2026-04-16-phase3-core-loop-screens.md`
 
-This is the **core product loop**. Everything is built on the plumbing from Phase 2.
+**What was done:**
 
-#### 3.1 — Session Components (Reanimated)
+- **`lib/design-tokens.ts`** — Shared colors (primary `#58CD04`, accent `#FF9600`, danger, surface, text), typography (900/700/500 font weight scale), radii (sm through xxl) extracted from legacy screens. Single source of truth for visual language.
+- **4 session components** (`components/session/`):
+  - `QuestionCard` — renders question body + maps `question.options: string[]` to 4 `OptionButton` children, derives state per option
+  - `OptionButton` — `memo()`'d, Reanimated animations for idle/selected/correct/wrong states. Press: spring scale 0.97. Correct: bounce 1.05. Wrong: horizontal shake (withSequence -8,8,-8,0 @ 60ms).
+  - `LivesBar` — 5 Ionicons hearts (filled/outline), horizontal shake via `useRef` tracking previous `livesRemaining`
+  - `ProgressBar` — segmented (one bar per question), each segment's bg color transitions on fill completion
+- **3 gamification components** (`components/gamification/`):
+  - `XPCounter` — animated counter 0→earnedXP using `useAnimatedReaction` + `runOnJS(setDisplayed)` pattern. 1200ms duration with `Easing.out(cubic)`.
+  - `StreakBadge` — flame Ionicon + count, bounce on `animate` prop flip
+  - `CharacterAvatar` — Ionicons face (happy/neutral/sad) with expression mapping
+- **Home screen wired** (`(app)/(tabs)/index.tsx`): Header (StreakBadge + LivesBar), greeting with user name from `useSession()`, XP/Level card, today's session card with 4 states (loading/completed/in-progress/start) and zero-lives countdown.
+- **Active Session wired** (`(app)/session/[id].tsx`): Reads session + questions from TanStack Query cache via `useQuery(["session", "active", id])`. Q&A loop driven by `sessionStore`. On mount: `sessionActions.reset(lives.data.lives)`. On answer: mutation → update store → `gamificationStore.addXP` → 1.2s animation delay → advance or navigate to result.
+- **Session Result wired** (`(app)/session/result.tsx`): Reads params, computes accuracy, maps to CharacterAvatar expression (happy ≥70%, neutral ≥40%, sad <40%). `XPCounter` animates pendingXP. "Continuar" → `useCompleteSession` mutation → invalidate all queries (session-today, streaks, xp, lives) → `gamificationStore.flush()` → `router.replace` to home.
 
-All animations run on the UI thread via worklets. **Zero `setState` inside animation callbacks.**
+**Design decisions made:**
 
-| Component | File | Props | Animation |
-|-----------|------|-------|-----------|
-| `QuestionCard` | `components/session/QuestionCard.tsx` | `question: Question` (from `@pruvi/shared`) | None — renders body text + 4 `OptionButton` children |
-| `OptionButton` | `components/session/OptionButton.tsx` | `option: string`, `letter: string`, `state: 'idle' \| 'selected' \| 'correct' \| 'wrong'`, `onPress` | Idle → tap: spring scale 0.97. Selected: bg transition + checkmark fade. Correct: spring to green + bounce scale. Wrong: horizontal shake (`withSequence(-8, 8, -8, 0)` @ 60ms each). **Must be `memo()`'d.** |
-| `LivesBar` | `components/session/LivesBar.tsx` | `lives: number`, `maxLives: 5` | On life lost: horizontal shake (`withSequence(-8, 8, -8, 0)` @ 60ms each) |
-| `ProgressBar` | `components/session/ProgressBar.tsx` | `current: number`, `total: number` | Animated width via `withTiming` |
+- **Scope: minimal core loop + legacy design tokens only** — skipped weekly activity chart, AI analysis card, mission cards, practice cards, subject breakdown on home. These appear in legacy screens but are out of Phase 3 scope. Polish arrives in later phases.
+- **Session questions stored in TanStack Query cache** (not Zustand) — Home's `useStartSession` success handler calls `queryClient.setQueryData(["session", "active", id], response)`. Session screen reads via `useQuery` with `queryFn` that throws + `retry: false`. Respects architecture rule: server state in TanStack Query, not Zustand.
+- **Router.replace (not push) to result screen** — user can't navigate back to mid-session after completing.
+- **Auto-advance 1200ms after answer** — matches `OptionButton` correct bounce + `LivesBar` shake duration, gives user time to see feedback before next question.
+- **`CharacterAvatar` uses Ionicons** (not custom illustrations) — no mascot assets exist and designing one is out of scope. Uses `happy`, `happy-outline` (for neutral with 70% opacity), `sad-outline`.
+- **`sessionStore.reset(5)` on unmount** — ensures clean state bleed prevention. If user backs out mid-session and comes back, the next session starts fresh.
+- **`correctCount` tracked in component state** (not store) — only used to compute navigation params on last question. The subtle timing issue (setState hasn't applied yet when navigating) is handled by computing `nextCorrectCount = correctCount + (res.correct ? 1 : 0)` inline.
 
-#### 3.2 — Gamification Components (Reanimated)
+**Deferred to later phases:**
 
-| Component | File | Props | Animation |
-|-----------|------|-------|-----------|
-| `XPCounter` | `components/gamification/XPCounter.tsx` | `earnedXP: number` | `useSharedValue(0)` → `withTiming(earnedXP, { duration: 1200, easing: Easing.out(cubic) })` |
-| `StreakBadge` | `components/gamification/StreakBadge.tsx` | `count: number` | Flame icon + count. Bounce on extension. |
-| `CharacterAvatar` | `components/gamification/CharacterAvatar.tsx` | `expression: 'neutral' \| 'happy' \| 'sad'` | Expression state changes based on session performance |
+- Weekly activity chart (needs `/users/me/calendar` — Phase 4)
+- Subject breakdown on home card (needs `/users/me/progress` — Phase 4)
+- Detailed explanations/stats on result screen (needs new question-detail endpoint — Phase 4+)
+- AI analysis card (Phase 4+, stretch)
+- Mission cards on home (Phase 7, weekly missions)
+- Practice cards (Phase 6, flashcards + simulados)
+- Pixel-perfect Figma recreation of legacy home with decorative SVGs, glows, gradient cards (polish phase)
+- Character mascot illustrations (Phase 8, polish)
 
-#### 3.3 — Home Screen (`(app)/(tabs)/index.tsx`)
-
-**Data flow:**
-
-```
-useTodaySession() ──→ session status (active/completed/null)
-useStreaks()       ──→ current streak count
-useLives()         ──→ remaining lives (hearts)
-useXp()            ──→ XP + level for display
-```
-
-**Renders:**
-- `StreakBadge` with current streak
-- `LivesBar` with remaining lives
-- Subject breakdown for the day's session (from `useTodaySession()` questions)
-- "Start Session" `Button` → calls `useStartSession()` mutation → on success, navigate to `session/[id]` with returned session ID
-- **Empty state:** "Você está em dia!" + time until next review (when today's session is completed)
-- **Zero lives state:** Disable start button, show countdown to `resetsAt`
-- Uses `Skeleton` components while queries load
-
-#### 3.4 — Active Session (`(app)/session/[id].tsx`)
-
-**Data flow:**
-
-```
-Route params               ──→ session ID
-useSessionStore            ──→ currentQuestionIndex, selectedOption, answerState, livesRemaining
-useAnswerQuestion() mut    ──→ POST /questions/:id/answer
-useGamificationStore       ──→ accumulate pendingXP from each answer
-```
-
-**Loop:**
-1. `QuestionCard` renders current question (from session questions array passed via params or cached query)
-2. User taps `OptionButton` → `sessionStore.selectOption()`
-3. Confirm button → `sessionStore.submitAnswer()` → `useAnswerQuestion()` mutation fires
-4. Response arrives: `{ correct, correctOptionIndex, livesRemaining, xpAwarded }`
-   - `correct=true` → `OptionButton` animates to green + bounce, `gamificationStore.addXP(xpAwarded)`
-   - `correct=false` → `OptionButton` animates shake, `LivesBar` shakes, `sessionStore` updates `livesRemaining`
-5. After animation settles → `sessionStore.nextQuestion()`
-6. On last question → navigate to `session/result` with stats in route params
-7. On `livesRemaining === 0` → navigate to `session/result` early (lives exhausted)
-
-**Cleanup:** `sessionStore.reset()` on screen unmount (via `useEffect` cleanup).
-
-#### 3.5 — Session Result (`(app)/session/result.tsx`)
-
-**Data flow:**
-
-```
-Route params               ──→ questionCount, correctCount, sessionId
-useGamificationStore       ──→ pendingXP (total earned during session)
-useCompleteSession() mut   ──→ POST /sessions/:id/complete
-useStreaks()               ──→ streak state after completion
-```
-
-**Renders:**
-- `XPCounter` animates from 0 → `pendingXP`
-- Accuracy percentage: `correctCount / questionCount * 100`
-- Streak state: maintained / broken / extended (from `useStreaks()` after invalidation)
-- `CharacterAvatar` with happy/sad expression based on performance
-- "Continuar" `Button`:
-  1. Calls `useCompleteSession()` mutation
-  2. `queryClient.invalidateQueries(['session', 'today'])`
-  3. `queryClient.invalidateQueries(['streaks'])`
-  4. `queryClient.invalidateQueries(['xp'])`
-  5. `gamificationStore.flush()`
-  6. Navigate back to home
-
-#### 3.6 — Cache Invalidation Summary
-
-```
-Answer question (during session):
-  └── Invalidates: ['lives'], ['xp']
-
-Session complete ("Continuar" pressed):
-  ├── Server side: Redis keys session-today, streaks invalidated
-  └── Client side: invalidateQueries(['session', 'today'], ['streaks'], ['xp'])
-```
-
-**Exit criteria:** Full study loop works end-to-end. User can start session, answer questions with animated feedback, see XP breakdown, return to home with updated stats.
+**Results:** 8 new files + 3 screens wired = 11 file changes. TypeScript compiles cleanly outside the pre-existing legacy files. **The core MVP study loop works end-to-end.**
 
 ---
 
-### Phase 4: Progress & Profile Screens
+### Phase 4: Progress & Profile Screens ← NEXT
 
 > **Goal:** The remaining two tab screens and the subject detail screen.
+>
+> **Prerequisites:** Phase 3 PR merged. This is the **first phase since Phase 0 that requires backend work** — need to build 2-3 new endpoints before the native side can be wired.
 
 #### 4.1 — New Backend Endpoints
 
@@ -773,33 +624,114 @@ App launch
 ## Part 7 — The Minimum Path to a Working Prototype
 
 ```
-Phase 0  (stabilize backend + shared schemas)  ──→  Foundation       ✅ Done (PR #2, PR #3)
+Phase 0  (stabilize backend + shared schemas)  ──→  Foundation       ✅ Done (PR #2)
 Phase 1  (frontend foundation)                  ──→  Skeleton         ✅ Done (PR #3)
-Phase 2  (service layer + hooks + stores)       ──→  Plumbing         ← NEXT
-Phase 3  (core loop screens)                    ──→  Working product
-Phase 4  (progress + profile)                   ──→  Complete MVP
+Phase 2  (service layer + hooks + stores)       ──→  Plumbing         ✅ Done (PR #4)
+Phase 3  (core loop screens)                    ──→  Working MVP      ✅ Done (PR #5)
+Phase 4  (progress + profile)                   ──→  Complete MVP     ← NEXT
 ```
 
-**What exists now:**
-- `@pruvi/shared` exports all schemas both sides need (47/47 server tests, 19/19 shared tests pass)
-- Native app has target navigation: `(auth)/` + `(app)/(tabs)/` + `session/` + `subject/`
-- Auth guard works (useSession + loading + redirect)
-- QueryClientProvider wrapping everything (staleTime 5min)
-- `Screen` and `Skeleton` common components ready
-- Auth screens (login/register) with react-hook-form + zod
-- `services/auth.service.ts` establishing the service layer pattern
-- 20+ pixel-perfect screens archived in `_legacy/` for reference
+**What works end-to-end today (post Phase 3):**
 
-**What Phase 2 builds next:**
-- `services/session.service.ts` — typed service functions for all session/gamification endpoints
-- `services/progress.service.ts` — subject stats and review history (requires 2 new backend endpoints)
-- TanStack Query hooks — `useTodaySession()`, `useStartSession()`, `useAnswerQuestion()`, `useLives()`, `useXp()`, `useStreaks()`, `useProgress()`, `useProfile()`
-- Zustand stores — `sessionStore` (Q&A loop state), `gamificationStore` (XP animation state)
+The core study loop is functional. A real user can:
+1. Register/login with email + password (Better Auth + SecureStore persistence)
+2. Land on a properly structured home screen with StreakBadge, LivesBar, XP/Level card
+3. Tap "Começar" → backend pre-generates 10 SM-2 prioritized questions
+4. Answer each question with animated feedback (OptionButton scale bounce on correct, shake on wrong; LivesBar shake on life lost)
+5. Auto-advance through 10 questions (or stop early at 0 lives)
+6. See animated XP breakdown on result screen (XPCounter 0→total, accuracy %, StreakBadge, CharacterAvatar expression)
+7. "Continuar" to home with updated stats (streak/XP/lives all invalidated and refetched)
+8. Come back tomorrow — SM-2 prioritizes questions they got wrong, and the prefetch worker has cached the next session
 
-**After Phase 3:** A user can sign up → land on a properly structured home screen → start a daily study session → answer 10 SM-2-selected questions with Reanimated animated feedback → see lives decrease on wrong answers → view an animated XP breakdown on the result screen → return to home with updated stats → come back tomorrow for questions prioritized by their performance.
+**Infrastructure complete:**
+
+- `@pruvi/shared` exports every schema both sides need (47/47 server tests, 19/19 shared tests pass)
+- Native navigation: `(auth)/` + `(app)/(tabs)/` + `session/` + `subject/` with auth guard
+- QueryClientProvider with sensible defaults (staleTime 5min, retry 2)
+- Common components: `Screen`, `Skeleton`
+- Design tokens module: colors, typography, radii
+- Service layer: `auth.service.ts`, `session.service.ts` (7 endpoint functions), `lib/api-client.ts` wrapper
+- 5 TanStack Query hook files covering session/lives/xp/streaks/profile
+- 2 Zustand stores for ephemeral UI state (sessionStore, gamificationStore)
+- 7 components with Reanimated animations (4 session + 3 gamification)
+- 3 screens fully wired (home, active session, result)
+- 20+ pixel-perfect legacy screens archived in `_legacy/` for reference
+
+**What Phase 4 builds next:**
+
+Backend work (first time since Phase 0):
+- `GET /users/me/progress` — per-subject accuracy stats from `review_log` + `subject` join
+- `GET /subjects/:slug/reviews` — review history for a subject
+- `GET /users/me/calendar?month=YYYY-MM` — dates with completed `daily_session` entries
+- Define corresponding Zod schemas in `@pruvi/shared`
+
+Native work:
+- `services/progress.service.ts` + `useProgress()`, `useSubjectReviews()`, `useCalendar()` hooks
+- `components/subject/SubjectCard.tsx` (memo'd FlashList item)
+- Wire `(app)/(tabs)/progress.tsx` — FlashList of SubjectCards
+- Wire `(app)/subject/[slug].tsx` — subject detail with review history FlashList
+- Wire `(app)/(tabs)/profile.tsx` — CharacterAvatar + XP progress + streak + study calendar + settings placeholders
 
 **After Phase 4:** All 5 core screens work end-to-end. The app matches the architecture document completely — navigation groups, service layer, typed Query hooks, Zustand stores for ephemeral UI state, Reanimated animations on the UI thread, FlashList for all lists, `@pruvi/shared` schemas as the single source of truth.
 
 **Phases 5-8** add breadth (onboarding persistence, content modes, social features, monetization) on top of a solid, well-architected core. Each follows the same patterns established in Phases 1-4 — schema → endpoint → service → hook → component → screen — so they're mechanical to implement once the foundation exists.
 
-**Phases 5-8** add breadth (onboarding persistence, content modes, social features, monetization) on top of a solid, well-architected core. Each follows the same patterns established in Phases 1-4 — schema → endpoint → service → hook → component → screen — so they're mechanical to implement once the foundation exists.
+---
+
+## Part 8 — Cross-Phase Design Decisions (Reference)
+
+Key decisions made during implementation that shape the codebase and may need to be revisited:
+
+### Architecture decisions
+
+| Decision | Phase | Rationale | Revisit if... |
+|----------|-------|-----------|---------------|
+| `@pruvi/shared` exports raw `.ts` (no build step) | 0 | Workspace packages resolve TS directly via pnpm + Expo bundler. Simpler, no build pipeline. | Publishing shared package outside the monorepo |
+| SM-2 single-object API (`calculateSm2(input)`) | 0 | Matches existing tests, cleaner than 2-arg variant | SM-2 needs to accept additional context (user, question metadata) |
+| `Difficulty` = string enum (`easy`\|`medium`\|`hard`) | 0 | DB stores integer 1-5, mapped via `difficultyFromNumber` at the boundary. XP calculation uses string keys. | Granularity needs to expand to 5 tiers |
+| `auth.ts` in `@pruvi/shared` contains non-auth schemas | 0 | File was misnamed in legacy — holds AnswerQuestionBodySchema, StreakResponseSchema. Kept as-is to avoid churn. | Convenient time to split into separate files |
+| Worker runs as separate process | 0 | Dockerfile currently only runs server. Worker needs its own deployment. | Scaling — maybe co-locate, maybe split further |
+
+### Frontend architecture
+
+| Decision | Phase | Rationale | Revisit if... |
+|----------|-------|-----------|---------------|
+| Archive legacy screens to `app/_legacy/` (Expo Router ignores `_` prefix) | 1 | Preserves pixel-perfect UI work as copy-paste reference for later phases | Legacy UI no longer relevant |
+| Use HeroUI's `Button` (not custom wrapper) | 1 | Already used across all existing screens. Wrapping adds indirection. | HeroUI dropped or migrated away from |
+| Rewrite auth forms with react-hook-form (not keep @tanstack/react-form) | 1 | Architecture doc mandates react-hook-form. Two form libs = confusion. | User strongly prefers @tanstack/react-form |
+| Auth guard in root `_layout.tsx` only, not per-screen | 1 | Single source of truth. Screens inside `(app)/` never check auth. | Need per-screen permissions (e.g., admin-only screens) |
+| `authClient.$fetch` for authenticated requests | 2 | Better Auth's plugin already handles session cookies. No custom token management. | Need to call non-auth server from native (different baseURL) |
+| Services throw on failure (no Result type) | 2 | TanStack Query's native error state handles UX. Matches Phase 1 login pattern. | Need fine-grained error types distinct from throws |
+| Query keys = server Redis cache keys | 2 | `['lives']`, `['xp']`, `['streaks']`, `['session', 'today']` mirror server-side invalidation | Server changes cache key schema |
+| Per-query staleTime = server Redis TTL | 2 | No point caching longer than server does | Server caching strategy changes |
+| Zustand actions nested under `actions` key | 2 | v5 best practice — lets components select state or actions without extra re-renders | Zustand pattern changes |
+| Session questions in TanStack Query cache (not Zustand) | 3 | Server data = Query. Home screen calls `setQueryData` after `useStartSession` success. | Need to modify questions mid-session (unlikely) |
+| `router.replace` (not push) to result screen | 3 | User can't back-nav to a finished session | User feedback requests the ability |
+| 1200ms auto-advance after answer | 3 | Matches OptionButton correct bounce + LivesBar shake duration | A/B test shows different feel better |
+
+### Scope boundaries (what we deferred)
+
+| Deferred | To phase | Why |
+|----------|----------|-----|
+| `progress.service.ts`, `useProgress()`, `useSubjectReviews()` | 4 | Backend endpoints don't exist yet — build service + endpoints together |
+| Subject breakdown on home screen | 4 | Needs `/users/me/progress` endpoint |
+| Weekly activity chart on home | 4 | Needs `/users/me/calendar` endpoint |
+| Detailed explanations/stats on result screen | 4+ | Requires new question-detail endpoints |
+| Onboarding persistence | 5 | Current onboarding UI in `_legacy/`, no backend yet — `user` table needs `selectedExam`, `prepTimeline`, `difficulties`, `dailyStudyTime`, `onboardingCompleted` columns |
+| Roleta subject filtering | 6 | Extend `POST /sessions/start` to accept `subjectIds[]` |
+| Flashcards | 6 | Design decision pending: reuse SM-2 engine with card UI vs. separate schema |
+| Simulados (timed mock exams) | 6 | Timed session variant |
+| Learning Trails | 6 | Large new schema: trail → unit → lesson → progress |
+| Friends/social | 7 | `friendship` table, CRUD endpoints, suggestion algorithm |
+| User search | 7 | Add `username` to user table, `ILIKE` search |
+| Contact sync | 7 | Hash + match phone numbers |
+| Phone/SMS verification | 7 | SMS provider integration (Twilio/AWS SNS) |
+| Referral system | 7 | Auto-generated codes + tracking |
+| Weekly missions | 7 | Definitions + progress tracking |
+| Premium/subscriptions | 8 | RevenueCat + feature gating |
+| Push notifications | 8 | Expo Push + trigger system |
+| Achievements | 8 | Criteria + event-driven unlocking |
+| Avatar upload | 8 | File upload + S3/R2 storage |
+| Real-time presence | 8 | WebSocket or polling |
+| Character mascot illustrations | 8 | Replaces Ionicons placeholder in CharacterAvatar |
+| Pixel-perfect legacy home recreation | polish | Decorative SVGs, glows, gradient cards — lower priority than feature breadth |
