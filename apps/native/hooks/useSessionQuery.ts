@@ -16,6 +16,7 @@ export function useStartSession() {
       sessionService.startSession(mode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["session", "today"] });
+      queryClient.invalidateQueries({ queryKey: ["lives"] });
     },
   });
 }
