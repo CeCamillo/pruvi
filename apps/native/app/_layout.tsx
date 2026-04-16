@@ -1,11 +1,10 @@
 import "@/global.css";
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Redirect, Slot, useSegments } from "expo-router";
 import { HeroUINativeProvider, Spinner } from "heroui-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { useEffect } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
 import { authClient } from "@/lib/auth-client";
@@ -20,21 +19,8 @@ const queryClient = new QueryClient({
 });
 
 function AuthGate() {
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session, isPending, error } = authClient.useSession();
   const segments = useSegments();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (isPending) return;
-
-    const inAuthGroup = segments[0] === "(auth)";
-
-    if (!session && !inAuthGroup) {
-      router.replace("/(auth)/login");
-    } else if (session && inAuthGroup) {
-      router.replace("/(app)/(tabs)");
-    }
-  }, [session, isPending, segments, router]);
 
   if (isPending) {
     return (
@@ -42,6 +28,26 @@ function AuthGate() {
         <Spinner size="lg" />
       </View>
     );
+  }
+
+  if (error) {
+    return (
+      <View className="flex-1 bg-background items-center justify-center px-8">
+        <Text className="text-foreground text-base text-center">
+          Não foi possível verificar sua sessão. Verifique sua conexão e tente novamente.
+        </Text>
+      </View>
+    );
+  }
+
+  const inAuthGroup = segments[0] === "(auth)";
+
+  if (!session && !inAuthGroup) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
+  if (session && inAuthGroup) {
+    return <Redirect href="/(app)/(tabs)" />;
   }
 
   return <Slot />;
