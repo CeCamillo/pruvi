@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useMemo } from "react";
 import { Text, View } from "react-native";
 
 import type { ClientQuestion } from "@pruvi/shared";
@@ -24,7 +24,10 @@ export function QuestionCard({
   correctIndex,
   onSelect,
 }: Props) {
-  const handleSelect = useCallback((index: number) => onSelect(index), [onSelect]);
+  const optionCallbacks = useMemo(
+    () => question.options.map((_, index) => () => onSelect(index)),
+    [question.options, onSelect],
+  );
 
   return (
     <View style={{ gap: 24 }}>
@@ -55,7 +58,7 @@ export function QuestionCard({
               letter={LETTERS[index] ?? String(index + 1)}
               text={optionText}
               state={state}
-              onPress={() => handleSelect(index)}
+              onPress={optionCallbacks[index]!}
               disabled={isDisabled}
             />
           );
