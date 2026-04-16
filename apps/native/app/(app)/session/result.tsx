@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Spinner } from "heroui-native";
+import { useEffect } from "react";
 import { Text, View } from "react-native";
 
 import { CharacterAvatar } from "@/components/gamification/CharacterAvatar";
@@ -32,6 +33,12 @@ export default function SessionResultScreen() {
 
   const expression: "happy" | "neutral" | "sad" =
     accuracy >= 70 ? "happy" : accuracy >= 40 ? "neutral" : "sad";
+
+  useEffect(() => {
+    return () => {
+      gamificationActions.flush();
+    };
+  }, [gamificationActions]);
 
   const handleContinue = () => {
     completeSession.mutate(
