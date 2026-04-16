@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Spinner } from "heroui-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 import type { StartSessionResponse } from "@pruvi/shared";
@@ -44,16 +44,26 @@ export default function SessionScreen() {
 
   const [correctIndex, setCorrectIndex] = useState<number | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
+  const advanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (lives.data) {
       sessionActions.reset(lives.data.lives);
     }
     return () => {
-      sessionActions.reset(5);
+      sessionActions.reset(lives.data?.maxLives ?? 5);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lives.data?.lives]);
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimeoutRef.current) {
+        clearTimeout(advanceTimeoutRef.current);
+        advanceTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   if (!session) {
     return (
@@ -95,9 +105,10 @@ export default function SessionScreen() {
           sessionActions.setLivesRemaining(res.livesRemaining);
           gamificationActions.addXP(res.xpAwarded);
           const nextCorrectCount = correctCount + (res.correct ? 1 : 0);
-          if (res.correct) setCorrectCount(nextCorrectCount);
+          setCorrectCount(nextCorrectCount);
 
-          setTimeout(() => {
+          advanceTimeoutRef.current = setTimeout(() => {
+            advanceTimeoutRef.current = null;
             const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
             const noLivesLeft = res.livesRemaining === 0;
 
