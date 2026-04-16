@@ -53,7 +53,7 @@ export class ReviewsService {
       : { ...INITIAL_SM2_STATE, quality };
 
     // 5. Calculate new SM-2 state
-    const newState = calculateSm2(previousState)._unsafeUnwrap();
+    const newState = calculateSm2(previousState);
 
     // 6. Insert new review_log row
     await this.repo.insertReview({

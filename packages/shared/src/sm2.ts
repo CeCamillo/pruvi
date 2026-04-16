@@ -1,4 +1,3 @@
-import { type Result, ok } from "neverthrow";
 import { z } from "zod";
 
 export const sm2InputSchema = z.object({
@@ -27,7 +26,7 @@ export const sm2OutputSchema = z.object({
 
 export type Sm2Output = z.infer<typeof sm2OutputSchema>;
 
-export function calculateSm2(input: Sm2Input): Result<Sm2Output, never> {
+export function calculateSm2(input: Sm2Input): Sm2Output {
   const { quality, repetitions, easeFactor, interval } = input;
 
   let nextRepetitions: number;
@@ -35,12 +34,10 @@ export function calculateSm2(input: Sm2Input): Result<Sm2Output, never> {
   let nextEaseFactor: number;
 
   if (quality < 3) {
-    // Wrong answer: reset progress, ease unchanged
     nextRepetitions = 0;
     nextInterval = 1;
     nextEaseFactor = easeFactor;
   } else {
-    // Correct answer: advance interval
     if (repetitions === 0) {
       nextInterval = 1;
     } else if (repetitions === 1) {
@@ -57,10 +54,10 @@ export function calculateSm2(input: Sm2Input): Result<Sm2Output, never> {
 
   const nextReviewAt = new Date(Date.now() + nextInterval * 24 * 60 * 60 * 1000).toISOString();
 
-  return ok({
+  return {
     repetitions: nextRepetitions,
     easeFactor: nextEaseFactor,
     interval: nextInterval,
     nextReviewAt,
-  });
+  };
 }
