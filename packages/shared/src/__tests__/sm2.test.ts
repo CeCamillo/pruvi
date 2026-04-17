@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateSm2 } from "../sm2";
+import { calculateSm2, qualityToCorrect } from "../sm2";
 
 const BASE = { repetitions: 0, easeFactor: 2.5, interval: 0 };
 
@@ -72,5 +72,19 @@ describe("calculateSm2", () => {
     for (let i = 1; i < easeValues.length; i++) {
       expect(easeValues[i]).toBeGreaterThan(easeValues.at(i - 1));
     }
+  });
+});
+
+describe("qualityToCorrect", () => {
+  it("returns true for quality >= 3", () => {
+    expect(qualityToCorrect(3)).toBe(true);
+    expect(qualityToCorrect(4)).toBe(true);
+    expect(qualityToCorrect(5)).toBe(true);
+  });
+
+  it("returns false for quality < 3", () => {
+    expect(qualityToCorrect(0)).toBe(false);
+    expect(qualityToCorrect(1)).toBe(false);
+    expect(qualityToCorrect(2)).toBe(false);
   });
 });

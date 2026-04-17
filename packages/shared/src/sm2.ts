@@ -61,3 +61,8 @@ export function calculateSm2(input: Sm2Input): Sm2Output {
     nextReviewAt,
   };
 }
+
+/** Map an SM-2 quality score (0-5) to a correct/wrong boolean. Quality >= 3 is "correct". */
+export function qualityToCorrect(quality: number): boolean {
+  return quality >= 3;
+}
