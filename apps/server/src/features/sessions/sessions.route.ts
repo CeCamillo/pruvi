@@ -7,6 +7,7 @@ import { QuestionsRepository } from "../questions/questions.repository";
 import { QuestionsService } from "../questions/questions.service";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
+import { formatMonth } from "../progress/month-utils";
 
 const sessionsRepo = new SessionsRepository(db);
 const questionsRepo = new QuestionsRepository(db);
@@ -98,9 +99,13 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const session = unwrapResult(result).data;
 
       // Invalidate caches that depend on session completion
+      const currentMonthKey = `calendar:${request.userId}:${formatMonth(new Date())}`;
       await Promise.all([
         fastify.cache.del(`session-today:${request.userId}`),
         fastify.cache.del(`streaks:${request.userId}`),
+        fastify.cache.del(`progress:${request.userId}`),
+        fastify.cache.del(currentMonthKey),
+        fastify.cache.del(`calendar:${request.userId}:current`),
       ]);
 
       // Enqueue next session pre-generation
