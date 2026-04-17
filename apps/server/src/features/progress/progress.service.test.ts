@@ -82,8 +82,8 @@ describe("ProgressService.getCalendar", () => {
     const result = await service.getCalendar("u1", undefined);
     expect(result.isOk()).toBe(true);
     const [, start, end] = getCalendarDates.mock.calls[0];
-    expect((start as Date).getMonth()).toBe(3);
-    expect((end as Date).getMonth()).toBe(4);
+    expect(start).toBe("2026-04-01");
+    expect(end).toBe("2026-05-01");
   });
 
   it("rejects future month with ValidationError", async () => {

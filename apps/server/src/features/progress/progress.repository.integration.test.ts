@@ -210,8 +210,8 @@ describe("ProgressRepository (integration)", () => {
         },
       ]);
 
-      const start = new Date(2026, 3, 1);
-      const end = new Date(2026, 4, 1);
+      const start = "2026-04-01";
+      const end = "2026-05-01";
       const result = await repo.getCalendarDates("u1", start, end);
       expect(result).toEqual(["2026-04-01", "2026-04-15"]);
     });
@@ -226,8 +226,8 @@ describe("ProgressRepository (integration)", () => {
         questionsCorrect: 10,
         completedAt: new Date(),
       });
-      const start = new Date(2026, 3, 1);
-      const end = new Date(2026, 4, 1);
+      const start = "2026-04-01";
+      const end = "2026-05-01";
       expect(await repo.getCalendarDates("u2", start, end)).toEqual([]);
     });
   });

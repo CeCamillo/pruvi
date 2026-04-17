@@ -36,21 +36,35 @@ describe("isFutureMonth", () => {
 });
 
 describe("monthBoundaries", () => {
-  it("returns inclusive start and exclusive end dates for a month", () => {
-    const { start, end } = monthBoundaries("2026-04");
-    expect(start.toISOString().slice(0, 10)).toBe("2026-04-01");
-    expect(end.toISOString().slice(0, 10)).toBe("2026-05-01");
+  it("returns inclusive start and exclusive end YYYY-MM-DD strings", () => {
+    expect(monthBoundaries("2026-04")).toEqual({
+      start: "2026-04-01",
+      end: "2026-05-01",
+    });
   });
 
   it("handles year rollover (December → next January)", () => {
-    const { start, end } = monthBoundaries("2026-12");
-    expect(start.toISOString().slice(0, 10)).toBe("2026-12-01");
-    expect(end.toISOString().slice(0, 10)).toBe("2027-01-01");
+    expect(monthBoundaries("2026-12")).toEqual({
+      start: "2026-12-01",
+      end: "2027-01-01",
+    });
   });
 
   it("handles leap year February", () => {
-    const { start, end } = monthBoundaries("2024-02");
-    expect(start.toISOString().slice(0, 10)).toBe("2024-02-01");
-    expect(end.toISOString().slice(0, 10)).toBe("2024-03-01");
+    expect(monthBoundaries("2024-02")).toEqual({
+      start: "2024-02-01",
+      end: "2024-03-01",
+    });
+  });
+
+  it("handles single-digit months with zero padding", () => {
+    expect(monthBoundaries("2026-01")).toEqual({
+      start: "2026-01-01",
+      end: "2026-02-01",
+    });
+    expect(monthBoundaries("2026-09")).toEqual({
+      start: "2026-09-01",
+      end: "2026-10-01",
+    });
   });
 });

@@ -81,11 +81,15 @@ export class ProgressRepository {
     return rows.length > 0;
   }
 
-  /** Distinct YYYY-MM-DD strings of completed daily_session rows inside [start, end). */
+  /**
+   * Distinct YYYY-MM-DD strings of completed daily_session rows inside [start, end).
+   * `monthStart` / `monthEnd` are YYYY-MM-DD strings — not Date objects — so the
+   * range is evaluated in the DB column's native type with no timezone coercion.
+   */
   async getCalendarDates(
     userId: string,
-    monthStart: Date,
-    monthEnd: Date,
+    monthStart: string,
+    monthEnd: string,
   ): Promise<string[]> {
     const rows = await this.db
       .selectDistinct({
@@ -95,8 +99,8 @@ export class ProgressRepository {
       .where(
         and(
           eq(dailySession.userId, userId),
-          gte(dailySession.date, monthStart.toISOString().slice(0, 10)),
-          lt(dailySession.date, monthEnd.toISOString().slice(0, 10)),
+          gte(dailySession.date, monthStart),
+          lt(dailySession.date, monthEnd),
           sql`${dailySession.completedAt} IS NOT NULL`,
         ),
       )
