@@ -7,6 +7,7 @@ import { QuestionsRepository } from "../questions/questions.repository";
 import { QuestionsService } from "../questions/questions.service";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
+import { formatMonth } from "../progress/month-utils";
 
 const sessionsRepo = new SessionsRepository(db);
 const questionsRepo = new QuestionsRepository(db);
@@ -97,11 +98,28 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       );
       const session = unwrapResult(result).data;
 
-      // Invalidate caches that depend on session completion
-      await Promise.all([
-        fastify.cache.del(`session-today:${request.userId}`),
-        fastify.cache.del(`streaks:${request.userId}`),
-      ]);
+      // Invalidate caches that depend on session completion. Swallow
+      // failures — stale cache self-heals via TTL, but a Redis hiccup
+      // shouldn't surface as a 500 when the session was persisted.
+      try {
+        const currentMonthKey = `calendar:${request.userId}:${formatMonth(new Date())}`;
+        await Promise.allSettled([
+          fastify.cache.del(`session-today:${request.userId}`),
+          fastify.cache.del(`streaks:${request.userId}`),
+          fastify.cache.del(`progress:${request.userId}`),
+          fastify.cache.del(currentMonthKey),
+          // `calendar:{userId}:current` covers clients that called
+          // `/users/me/calendar` without `?month=`. Past-month cache
+          // entries are intentionally NOT invalidated — completed
+          // sessions don't retroactively change past calendars.
+          fastify.cache.del(`calendar:${request.userId}:current`),
+        ]);
+      } catch (err) {
+        fastify.log.warn(
+          { err, userId: request.userId },
+          "session-complete cache invalidation failed",
+        );
+      }
 
       // Enqueue next session pre-generation
       if (fastify.queues.sessionPrefetch) {

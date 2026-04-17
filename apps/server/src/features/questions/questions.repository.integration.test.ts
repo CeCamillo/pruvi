@@ -190,4 +190,28 @@ describe("QuestionsRepository (integration)", () => {
       expect(result).toHaveLength(3);
     });
   });
+
+  describe("getSubjectSlugForQuestion", () => {
+    it("returns the slug of the subject owning the question", async () => {
+      const [s] = await db
+        .insert(subject)
+        .values({ slug: "fisica", name: "Física" })
+        .returning();
+      const [q] = await db
+        .insert(question)
+        .values({
+          subjectId: s.id,
+          body: "q",
+          options: ["a", "b", "c", "d"],
+          correctOptionIndex: 0,
+          difficulty: 3,
+        })
+        .returning();
+      expect(await repo.getSubjectSlugForQuestion(q.id)).toBe("fisica");
+    });
+
+    it("returns null for unknown question id", async () => {
+      expect(await repo.getSubjectSlugForQuestion(999999)).toBeNull();
+    });
+  });
 });
