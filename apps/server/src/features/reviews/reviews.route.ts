@@ -32,23 +32,34 @@ export const reviewsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         questionId,
         selectedOptionIndex,
       );
-      const response = unwrapResult(result);
 
-      // Invalidate lives, XP, progress, and subject-specific review caches
-      const slug = await questionsRepo.getSubjectSlugForQuestion(questionId);
-      const invalidations: Promise<unknown>[] = [
-        fastify.cache.del(`lives:${request.userId}`),
-        fastify.cache.del(`xp:${request.userId}`),
-        fastify.cache.del(`progress:${request.userId}`),
-      ];
-      if (slug) {
-        invalidations.push(
-          fastify.cache.del(`subject-reviews:${request.userId}:${slug}`),
+      // Invalidate BEFORE unwrapping the result: even the error path
+      // (e.g., ValidationError when lives hit 0) may have already
+      // mutated lives / XP / review_log, so the caches must be dropped
+      // regardless of success or failure. Cache failures are swallowed
+      // and logged — stale cache self-heals via TTL, but losing the
+      // answer result to a Redis blip would be user-visible.
+      try {
+        const slug = await questionsRepo.getSubjectSlugForQuestion(questionId);
+        const invalidations: Promise<unknown>[] = [
+          fastify.cache.del(`lives:${request.userId}`),
+          fastify.cache.del(`xp:${request.userId}`),
+          fastify.cache.del(`progress:${request.userId}`),
+        ];
+        if (slug) {
+          invalidations.push(
+            fastify.cache.del(`subject-reviews:${request.userId}:${slug}`),
+          );
+        }
+        await Promise.allSettled(invalidations);
+      } catch (err) {
+        fastify.log.warn(
+          { err, userId: request.userId, questionId },
+          "answer cache invalidation failed",
         );
       }
-      await Promise.all(invalidations);
 
-      return response;
+      return unwrapResult(result);
     },
   );
 };
