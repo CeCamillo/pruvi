@@ -9,6 +9,7 @@ import { LivesBar } from "@/components/session/LivesBar";
 import { Screen } from "@/components/common/Screen";
 import { Skeleton } from "@/components/common/Skeleton";
 import { StreakBadge } from "@/components/gamification/StreakBadge";
+import { XpCard } from "@/components/gamification/XpCard";
 import {
   useStartSession,
   useTodaySession,
@@ -99,33 +100,7 @@ export default function HomeScreen() {
         {xp.isLoading ? (
           <Skeleton width="100%" height={80} />
         ) : xp.data ? (
-          <View
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderRadius: 24,
-              borderWidth: 2,
-              borderColor: colors.border,
-              padding: 20,
-              gap: 8,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>
-                Nível {xp.data.currentLevel}
-              </Text>
-              <Text style={{ fontSize: 14, fontWeight: "900", color: colors.primary }}>
-                {xp.data.totalXp} XP
-              </Text>
-            </View>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textMuted }}>
-              Faltam {xp.data.xpForNextLevel} XP para o próximo nível
-            </Text>
-          </View>
+          <XpCard xp={xp.data} />
         ) : null}
 
         <View
