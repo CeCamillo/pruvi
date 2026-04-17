@@ -17,10 +17,12 @@ export const progressService = {
       subjectReviewsResponseSchema,
     ),
 
-  getCalendar: (month?: string) =>
-    apiRequest(
-      `/users/me/calendar${month ? `?month=${month}` : ""}`,
+  getCalendar: (month?: string) => {
+    const qs = month ? `?${new URLSearchParams({ month }).toString()}` : "";
+    return apiRequest(
+      `/users/me/calendar${qs}`,
       { method: "GET" },
       calendarResponseSchema,
-    ),
+    );
+  },
 };
