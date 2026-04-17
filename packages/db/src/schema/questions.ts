@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { integer, jsonb, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
 import { subject } from "./subjects";
 
@@ -9,6 +9,8 @@ export const question = pgTable("question", {
   options: jsonb("options").$type<string[]>().notNull(),
   correctOptionIndex: integer("correct_option_index").notNull(),
   difficulty: integer("difficulty").notNull().default(1),
+  /** True when the question involves calculation (filtered out in "theoretical" mode). */
+  requiresCalculation: boolean("requires_calculation").notNull().default(false),
   source: text("source"),
   subjectId: integer("subject_id")
     .notNull()
