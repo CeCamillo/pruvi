@@ -29,6 +29,8 @@ export function useAnswerQuestion() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lives"] });
       queryClient.invalidateQueries({ queryKey: ["xp"] });
+      queryClient.invalidateQueries({ queryKey: ["progress"] });
+      queryClient.invalidateQueries({ queryKey: ["subject-reviews"] });
     },
   });
 }
@@ -50,6 +52,9 @@ export function useCompleteSession() {
       queryClient.invalidateQueries({ queryKey: ["session", "today"] });
       queryClient.invalidateQueries({ queryKey: ["streaks"] });
       queryClient.invalidateQueries({ queryKey: ["xp"] });
+      queryClient.invalidateQueries({ queryKey: ["lives"] });
+      queryClient.invalidateQueries({ queryKey: ["progress"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar"] });
     },
   });
 }
