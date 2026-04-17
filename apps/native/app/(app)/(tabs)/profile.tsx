@@ -26,9 +26,18 @@ export default function ProfileScreen() {
   const currentMonthLabel = formatMonthLabelPt(new Date());
 
   const handleLogout = async () => {
-    await authService.logout();
-    queryClient.clear();
-    router.replace("/(auth)/login");
+    // Always clear local state and navigate, even if the server call
+    // fails (offline, 5xx). Leaving the user stuck on the profile tab
+    // with no way to retry is worse than a brief server-side session
+    // that'll time out on its own.
+    try {
+      await authService.logout();
+    } catch (err) {
+      console.warn("[profile] logout request failed", err);
+    } finally {
+      queryClient.clear();
+      router.replace("/(auth)/login");
+    }
   };
 
   return (
