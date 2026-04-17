@@ -36,7 +36,7 @@ function SubjectCardImpl({ subject, onPress }: Props) {
       accessibilityRole="button"
       accessibilityLabel={`${subject.name}, ${subject.accuracy}% de acerto, ${subject.correctCount} de ${subject.totalQuestions} questões`}
       style={{
-        backgroundColor: "#FFFFFF",
+        backgroundColor: colors.card,
         borderRadius: radii.xl,
         borderWidth: 2,
         borderColor: colors.border,

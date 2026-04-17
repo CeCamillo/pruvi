@@ -18,7 +18,7 @@ function ReviewHistoryItemImpl({ review }: Props) {
         flexDirection: "row",
         gap: 12,
         padding: 16,
-        backgroundColor: "#FFFFFF",
+        backgroundColor: colors.card,
         borderRadius: radii.md,
         borderWidth: 2,
         borderColor: colors.border,
@@ -30,15 +30,16 @@ function ReviewHistoryItemImpl({ review }: Props) {
           width: 28,
           height: 28,
           borderRadius: radii.sm,
-          backgroundColor: review.correct ? colors.primary : colors.danger,
+          backgroundColor: review.correct ? colors.success : colors.danger,
           alignItems: "center",
           justifyContent: "center",
         }}
+        accessibilityLabel={review.correct ? "Resposta correta" : "Resposta incorreta"}
       >
         <Ionicons
           name={review.correct ? "checkmark" : "close"}
           size={16}
-          color="#FFFFFF"
+          color={colors.onFill}
         />
       </View>
       <View style={{ flex: 1, gap: 4 }}>

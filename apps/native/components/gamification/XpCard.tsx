@@ -12,7 +12,7 @@ export function XpCard({ xp }: Props) {
   return (
     <View
       style={{
-        backgroundColor: "#FFFFFF",
+        backgroundColor: colors.card,
         borderRadius: 24,
         borderWidth: 2,
         borderColor: colors.border,
