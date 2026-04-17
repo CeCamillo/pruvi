@@ -1,15 +1,11 @@
 import { Text, View } from "react-native";
 
+import type { XpResponse } from "@pruvi/shared";
+
 import { colors } from "@/lib/design-tokens";
 
-interface XpData {
-  currentLevel: number;
-  totalXp: number;
-  xpForNextLevel: number;
-}
-
 interface Props {
-  xp: XpData;
+  xp: XpResponse;
 }
 
 export function XpCard({ xp }: Props) {
