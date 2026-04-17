@@ -1,6 +1,7 @@
 import { and, asc, eq, lte, notInArray, type SQL } from "drizzle-orm";
 import { question } from "@pruvi/db/schema/questions";
 import { reviewLog } from "@pruvi/db/schema/review-log";
+import { subject } from "@pruvi/db/schema/subjects";
 import type { db } from "@pruvi/db";
 
 type DbClient = typeof db;
@@ -108,5 +109,16 @@ export class QuestionsRepository {
     }
 
     return selected;
+  }
+
+  /** Look up the slug of the subject owning a question. Used by cache invalidation. */
+  async getSubjectSlugForQuestion(questionId: number): Promise<string | null> {
+    const rows = await this.db
+      .select({ slug: subject.slug })
+      .from(question)
+      .innerJoin(subject, eq(subject.id, question.subjectId))
+      .where(eq(question.id, questionId))
+      .limit(1);
+    return rows[0]?.slug ?? null;
   }
 }
