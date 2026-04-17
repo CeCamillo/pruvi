@@ -26,13 +26,12 @@ export class ProgressRepository {
 
   /** Aggregate review_log by subject for a user. Only subjects with >= 1 row surface. */
   async getProgressForUser(userId: string): Promise<SubjectProgressRow[]> {
-    const rows = await this.db
+    return this.db
       .select({
         slug: subject.slug,
         name: subject.name,
         totalQuestions: sql<number>`COUNT(*)::int`,
         correctCount: sql<number>`SUM(CASE WHEN ${reviewLog.quality} >= 3 THEN 1 ELSE 0 END)::int`,
-        lastActivity: sql<Date>`MAX(${reviewLog.reviewedAt})`,
       })
       .from(reviewLog)
       .innerJoin(question, eq(question.id, reviewLog.questionId))
@@ -40,13 +39,6 @@ export class ProgressRepository {
       .where(eq(reviewLog.userId, userId))
       .groupBy(subject.slug, subject.name)
       .orderBy(desc(sql`MAX(${reviewLog.reviewedAt})`));
-
-    return rows.map((r) => ({
-      slug: r.slug,
-      name: r.name,
-      totalQuestions: r.totalQuestions,
-      correctCount: r.correctCount,
-    }));
   }
 
   /** Most recent N review_log rows for a user scoped to one subject slug. */
