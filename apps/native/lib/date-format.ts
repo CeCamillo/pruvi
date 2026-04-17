@@ -17,10 +17,15 @@ export function formatMonthLabelPt(date: Date): string {
 }
 
 /** "há 2h", "ontem", "há 3 dias", "há 2 semanas", "há 1 mês". */
-export function formatRelativeTime(iso: string): string {
+export function formatRelativeTime(iso: string, now: Date = new Date()): string {
   const then = new Date(iso);
-  const now = new Date();
   const diffMs = now.getTime() - then.getTime();
+
+  // Clock drift: server timestamps occasionally arrive ahead of local
+  // Date.now(). Treat any future timestamp as "just now" instead of
+  // rendering "há -3min" once the first minute elapses.
+  if (diffMs < 0) return "agora";
+
   const diffMinutes = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
@@ -32,7 +37,11 @@ export function formatRelativeTime(iso: string): string {
   if (diffHours < 24) return `há ${diffHours}h`;
   if (diffDays === 1) return "ontem";
   if (diffDays < 7) return `há ${diffDays} dias`;
-  if (diffWeeks < 4) return `há ${diffWeeks} ${diffWeeks === 1 ? "semana" : "semanas"}`;
+  // Fall through to months only once we have at least one month's worth of
+  // days. Otherwise `diffDays === 28` (exactly 4 weeks) produced "há 0 meses".
+  if (diffMonths < 1) {
+    return `há ${diffWeeks} ${diffWeeks === 1 ? "semana" : "semanas"}`;
+  }
   return `há ${diffMonths} ${diffMonths === 1 ? "mês" : "meses"}`;
 }
 
