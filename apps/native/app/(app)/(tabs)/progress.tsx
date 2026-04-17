@@ -1,6 +1,9 @@
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
+import { useCallback } from "react";
 import { Text, View } from "react-native";
+
+import type { SubjectProgress } from "@pruvi/shared";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -13,6 +16,20 @@ import { colors } from "@/lib/design-tokens";
 export default function ProgressScreen() {
   const { data, isLoading, isError, refetch } = useProgress();
   const router = useRouter();
+
+  const handlePress = useCallback(
+    (slug: string) => {
+      router.push(`/subject/${slug}`);
+    },
+    [router],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: SubjectProgress }) => (
+      <SubjectCard subject={item} onPress={handlePress} />
+    ),
+    [handlePress],
+  );
 
   if (isLoading) {
     return (
@@ -57,12 +74,7 @@ export default function ProgressScreen() {
         data={subjects}
         estimatedItemSize={108}
         keyExtractor={(s) => s.slug}
-        renderItem={({ item }) => (
-          <SubjectCard
-            subject={item}
-            onPress={() => router.push(`/subject/${item.slug}`)}
-          />
-        )}
+        renderItem={renderItem}
         ListEmptyComponent={
           <EmptyState text="Complete uma sessão para ver seu progresso." />
         }

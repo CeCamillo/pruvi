@@ -1,6 +1,7 @@
 import { memo, useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -12,7 +13,7 @@ import { colors, radii } from "@/lib/design-tokens";
 
 interface Props {
   subject: SubjectProgress;
-  onPress: () => void;
+  onPress: (slug: string) => void;
 }
 
 function SubjectCardImpl({ subject, onPress }: Props) {
@@ -20,13 +21,20 @@ function SubjectCardImpl({ subject, onPress }: Props) {
 
   useEffect(() => {
     width.value = withTiming(subject.accuracy, { duration: 600 });
+    return () => {
+      cancelAnimation(width);
+    };
   }, [subject.accuracy, width]);
 
   const barStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }));
 
+  const handlePress = () => onPress(subject.slug);
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`${subject.name}, ${subject.accuracy}% de acerto, ${subject.correctCount} de ${subject.totalQuestions} questões`}
       style={{
         backgroundColor: "#FFFFFF",
         borderRadius: radii.xl,
