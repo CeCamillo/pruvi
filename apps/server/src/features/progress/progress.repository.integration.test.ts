@@ -230,5 +230,45 @@ describe("ProgressRepository (integration)", () => {
       const end = "2026-05-01";
       expect(await repo.getCalendarDates("u2", start, end)).toEqual([]);
     });
+
+    it("excludes sessions outside the requested range (inclusive start, exclusive end)", async () => {
+      await seedUser("u1");
+      await db.insert(dailySession).values([
+        // Day before start — must be excluded
+        {
+          userId: "u1",
+          date: "2026-03-31",
+          questionsAnswered: 10,
+          questionsCorrect: 10,
+          completedAt: new Date(),
+        },
+        // First day of range — must be included
+        {
+          userId: "u1",
+          date: "2026-04-01",
+          questionsAnswered: 10,
+          questionsCorrect: 10,
+          completedAt: new Date(),
+        },
+        // Last day of month — must be included
+        {
+          userId: "u1",
+          date: "2026-04-30",
+          questionsAnswered: 10,
+          questionsCorrect: 10,
+          completedAt: new Date(),
+        },
+        // First day of next month (exclusive end) — must be excluded
+        {
+          userId: "u1",
+          date: "2026-05-01",
+          questionsAnswered: 10,
+          questionsCorrect: 10,
+          completedAt: new Date(),
+        },
+      ]);
+      const result = await repo.getCalendarDates("u1", "2026-04-01", "2026-05-01");
+      expect(result).toEqual(["2026-04-01", "2026-04-30"]);
+    });
   });
 });
