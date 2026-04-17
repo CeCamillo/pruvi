@@ -1,6 +1,11 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { calendarQuerySchema } from "@pruvi/shared";
+import {
+  calendarQuerySchema,
+  type CalendarResponse,
+  type ProgressResponse,
+  type SubjectReviewsResponse,
+} from "@pruvi/shared";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
 import { ProgressRepository } from "./progress.repository";
@@ -10,6 +15,10 @@ const repo = new ProgressRepository(db);
 const service = new ProgressService(repo);
 
 const PROGRESS_TTL = 60; // seconds — matches xp TTL
+
+const subjectParamsSchema = z.object({
+  slug: z.string().min(1),
+});
 
 export const progressRoutes: FastifyPluginAsyncZod = async (fastify) => {
   // GET /users/me/progress
@@ -21,15 +30,7 @@ export const progressRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request) => {
       const cacheKey = `progress:${request.userId}`;
 
-      const cached = await fastify.cache.get<{
-        subjects: Array<{
-          slug: string;
-          name: string;
-          totalQuestions: number;
-          correctCount: number;
-          accuracy: number;
-        }>;
-      }>(cacheKey);
+      const cached = await fastify.cache.get<ProgressResponse>(cacheKey);
       if (cached) {
         return successResponse(cached);
       }
@@ -47,23 +48,14 @@ export const progressRoutes: FastifyPluginAsyncZod = async (fastify) => {
     {
       preHandler: [fastify.authenticate],
       schema: {
-        params: z.object({
-          slug: z.string().min(1),
-        }),
+        params: subjectParamsSchema,
       },
     },
     async (request) => {
-      const { slug } = request.params as { slug: string };
+      const { slug } = request.params;
       const cacheKey = `subject-reviews:${request.userId}:${slug}`;
 
-      const cached = await fastify.cache.get<{
-        reviews: Array<{
-          questionId: number;
-          body: string;
-          correct: boolean;
-          reviewedAt: string;
-        }>;
-      }>(cacheKey);
+      const cached = await fastify.cache.get<SubjectReviewsResponse>(cacheKey);
       if (cached) {
         return successResponse(cached);
       }
@@ -85,10 +77,10 @@ export const progressRoutes: FastifyPluginAsyncZod = async (fastify) => {
       },
     },
     async (request) => {
-      const { month } = request.query as { month?: string };
+      const { month } = request.query;
       const cacheKey = `calendar:${request.userId}:${month ?? "current"}`;
 
-      const cached = await fastify.cache.get<{ dates: string[] }>(cacheKey);
+      const cached = await fastify.cache.get<CalendarResponse>(cacheKey);
       if (cached) {
         return successResponse(cached);
       }
