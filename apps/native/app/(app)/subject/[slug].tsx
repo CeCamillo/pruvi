@@ -5,6 +5,7 @@ import { Text, View } from "react-native";
 import type { SubjectProgress } from "@pruvi/shared";
 
 import { EmptyState } from "@/components/common/EmptyState";
+import { ErrorState } from "@/components/common/ErrorState";
 import { NotFoundState } from "@/components/common/NotFoundState";
 import { Screen } from "@/components/common/Screen";
 import { Skeleton } from "@/components/common/Skeleton";
@@ -17,7 +18,7 @@ function SubjectHeader({ subject }: { subject: SubjectProgress }) {
   return (
     <View
       style={{
-        backgroundColor: "#FFFFFF",
+        backgroundColor: colors.card,
         borderRadius: radii.xl,
         borderWidth: 2,
         borderColor: colors.border,
@@ -51,12 +52,31 @@ export default function SubjectScreen() {
   if (progress.isLoading || reviews.isLoading) {
     return (
       <Screen scrollable={false}>
+        <Stack.Screen options={{ title: "Matéria" }} />
         <Skeleton width="100%" height={96} />
       </Screen>
     );
   }
 
-  if (reviews.isError || !subject) {
+  // Transient failure (network, server error) — offer a retry rather
+  // than the terminal "matéria não encontrada" state.
+  if (progress.isError || reviews.isError) {
+    return (
+      <Screen scrollable={false}>
+        <Stack.Screen options={{ title: "Matéria" }} />
+        <ErrorState
+          onRetry={() => {
+            progress.refetch();
+            reviews.refetch();
+          }}
+        />
+      </Screen>
+    );
+  }
+
+  // Both queries succeeded but the slug isn't in the progress list —
+  // either the subject doesn't exist or the user has never reviewed it.
+  if (!subject) {
     return (
       <>
         <Stack.Screen options={{ title: "Matéria" }} />
