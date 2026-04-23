@@ -13,6 +13,7 @@ import Svg, { Circle as SvgCircle, Path } from "react-native-svg";
 
 import { difficultyFromNumber, type StartSessionResponse } from "@pruvi/shared";
 
+import { OptionCard, type OptionCardState } from "@/components/session/OptionCard";
 import { useAnswerQuestion } from "@/hooks/useSessionQuery";
 import { useLives } from "@/hooks/useLives";
 import { useGamificationStore } from "@/stores/gamificationStore";
@@ -255,49 +256,31 @@ export default function SessionScreen() {
           {currentQuestion.options.map((optionText, index) => {
             const letter = OPTION_LETTERS[index] ?? String(index + 1);
             const isSelected = selectedOptionIndex === index;
-            const isCorrect =
-              answerState !== "idle" && correctIndex === index;
+            const isCorrect = answerState !== "idle" && correctIndex === index;
             const isWrongSelection =
               answerState === "wrong" && isSelected && correctIndex !== index;
 
-            let cardStyle: object = styles.optionCard;
-            let letterStyle: object = styles.optionLetter;
-            let letterTextStyle: object = styles.optionLetterText;
-            let textStyle: object = styles.optionText;
-
-            if (isCorrect) {
-              cardStyle = { ...styles.optionCard, ...styles.optionCardCorrect };
-              letterStyle = { ...styles.optionLetter, ...styles.optionLetterCorrect };
-              letterTextStyle = { ...styles.optionLetterText, ...styles.optionLetterTextSelected };
-              textStyle = { ...styles.optionText, ...styles.optionTextSelected };
-            } else if (isWrongSelection) {
-              cardStyle = { ...styles.optionCard, ...styles.optionCardWrong };
-              letterStyle = { ...styles.optionLetter, ...styles.optionLetterWrong };
-              letterTextStyle = { ...styles.optionLetterText, ...styles.optionLetterTextSelected };
-              textStyle = { ...styles.optionText, ...styles.optionTextSelected };
-            } else if (isSelected) {
-              cardStyle = { ...styles.optionCard, ...styles.optionCardSelected };
-              letterStyle = { ...styles.optionLetter, ...styles.optionLetterSelected };
-              letterTextStyle = { ...styles.optionLetterText, ...styles.optionLetterTextSelected };
-              textStyle = { ...styles.optionText, ...styles.optionTextSelected };
-            }
+            const state: OptionCardState = isCorrect
+              ? "correct"
+              : isWrongSelection
+                ? "wrong"
+                : isSelected
+                  ? "selected"
+                  : "idle";
 
             return (
-              <Pressable
+              <OptionCard
                 key={index}
-                style={cardStyle}
+                letter={letter}
+                text={optionText}
+                state={state}
                 onPress={() => {
                   if (answerState === "idle") {
                     sessionActions.selectOption(index);
                   }
                 }}
                 disabled={answerState !== "idle"}
-              >
-                <View style={letterStyle}>
-                  <Text style={letterTextStyle}>{letter}</Text>
-                </View>
-                <Text style={textStyle}>{optionText}</Text>
-              </Pressable>
+              />
             );
           })}
         </View>
@@ -444,65 +427,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   optionsList: { gap: 12 },
-  optionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: "rgba(239, 236, 236, 0.4)",
-    paddingHorizontal: 20,
-    minHeight: 68,
-    paddingVertical: 14,
-    gap: 16,
-  },
-  optionCardSelected: {
-    backgroundColor: "rgba(88, 205, 4, 0.05)",
-    borderColor: "#58CD04",
-  },
-  optionCardCorrect: {
-    backgroundColor: "rgba(88, 205, 4, 0.15)",
-    borderColor: "#58CD04",
-  },
-  optionCardWrong: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderColor: "#EF4444",
-  },
-  optionLetter: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: "#F0F0F0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  optionLetterSelected: {
-    backgroundColor: "#58CD04",
-  },
-  optionLetterCorrect: {
-    backgroundColor: "#58CD04",
-  },
-  optionLetterWrong: {
-    backgroundColor: "#EF4444",
-  },
-  optionLetterText: {
-    fontWeight: "900",
-    fontSize: 13,
-    color: "#6B6B6B",
-  },
-  optionLetterTextSelected: {
-    color: "#FFFFFF",
-  },
-  optionText: {
-    flex: 1,
-    fontWeight: "700",
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#2B2B2B",
-  },
-  optionTextSelected: {
-    fontWeight: "900",
-  },
   bottomBar: {
     backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderTopWidth: 1,
