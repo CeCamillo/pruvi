@@ -27,6 +27,12 @@ export function getTestDb() {
 /** Push schema to test database by applying every migration in order. */
 export async function setupTestDb() {
   const testPool = getTestPool();
+
+  // Reset schema to ensure a clean slate — handles migration consolidations
+  // and schema drift between test runs.
+  await testPool.query("DROP SCHEMA public CASCADE");
+  await testPool.query("CREATE SCHEMA public");
+
   const migrationsDir = resolve(
     import.meta.dirname ?? ".",
     "../../../../packages/db/src/migrations"
