@@ -160,6 +160,16 @@ describe("RoletaService", () => {
       expect(result.isErr()).toBe(true);
       expect(result._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
     });
+
+    it("returns ValidationError when no subjects are available", async () => {
+      repo.getConfig.mockResolvedValue(null);
+      repo.listSubjectSlugs.mockResolvedValue([]);
+
+      const result = await service.spin("u1");
+
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError);
+    });
   });
 
   describe("answer", () => {
