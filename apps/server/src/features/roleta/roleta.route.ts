@@ -4,7 +4,7 @@ import {
   roletaConfigSchema,
 } from "@pruvi/shared";
 import { db } from "@pruvi/db";
-import { unwrapResult } from "../../types";
+import { successResponse, unwrapResult } from "../../types";
 import { RoletaRepository } from "./roleta.repository";
 import { RoletaService } from "./roleta.service";
 
@@ -24,7 +24,7 @@ export const roletaRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const cacheKey = `roleta-config:${request.userId}`;
       const cached = await fastify.cache.get<{ subjects: string[] }>(cacheKey);
       if (cached) {
-        return { success: true as const, data: cached };
+        return successResponse(cached);
       }
       const result = await service.getConfig(request.userId);
       const response = unwrapResult(result);
