@@ -1,10 +1,10 @@
 # Pruvi Integration Map
 
-> Last updated: 2026-04-16
+> Last updated: 2026-04-23
 >
 > This document maps every integration between `apps/native` and `apps/server`. All frontend work follows `apps/native/native_architecture.md` — that document is the single source of truth for how the native app is built.
 >
-> **Current status:** Phases 0-3 complete. **The core MVP works end-to-end** — users can sign up, start a daily session, answer SM-2 prioritized questions with animated feedback, earn XP, maintain streaks. Phase 4 (Progress & Profile) is next and requires new backend endpoints.
+> **Current status:** Phases 0-4 complete. **The 5 core MVP screens are wired end-to-end** — users sign up, start a daily session, answer SM-2 prioritized questions with animated feedback, earn XP, maintain streaks, and inspect per-subject progress + profile. Phase 5 (Onboarding Persistence) is next.
 
 ---
 
@@ -431,11 +431,11 @@ Every phase follows the **new screen checklist** from `native_architecture.md`:
 
 ---
 
-### Phase 4: Progress & Profile Screens ← NEXT
+### Phase 4: Progress & Profile Screens ✅
 
 > **Goal:** The remaining two tab screens and the subject detail screen.
 >
-> **Prerequisites:** Phase 3 PR merged. This is the **first phase since Phase 0 that requires backend work** — need to build 2-3 new endpoints before the native side can be wired.
+> **Prerequisites:** Phase 3 PR merged. This was the **first phase since Phase 0 that required backend work** — built three new endpoints before wiring the native side.
 
 #### 4.1 — New Backend Endpoints
 
@@ -500,7 +500,7 @@ useCalendar()    ──→ studied dates for calendar display (new hook, new ser
 
 ---
 
-### Phase 5: Onboarding Persistence
+### Phase 5: Onboarding Persistence ← NEXT
 
 > **Goal:** New user onboarding choices are saved to the backend and respected on subsequent launches.
 >
