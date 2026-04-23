@@ -49,17 +49,7 @@ export async function setupTestDb() {
       .filter(Boolean);
 
     for (const statement of statements) {
-      try {
-        await testPool.query(statement);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (
-          !message.includes("already exists") &&
-          !message.includes("duplicate key")
-        ) {
-          throw err;
-        }
-      }
+      await testPool.query(statement);
     }
   }
 }

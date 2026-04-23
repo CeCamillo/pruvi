@@ -112,6 +112,16 @@ describe("RoletaRepository (integration)", () => {
       const qs = await repo.selectRandomQuestions(s.id, 3);
       expect(qs).toHaveLength(2);
     });
+
+    it("returns an empty array when the subject has no questions", async () => {
+      const [subj] = await db
+        .insert(subject)
+        .values({ slug: "empty", name: "Empty" })
+        .returning();
+      const qs = await repo.selectRandomQuestions(subj!.id, 3);
+      expect(qs).toHaveLength(0);
+      expect(Array.isArray(qs)).toBe(true);
+    });
   });
 
   describe("insertRoletaReview", () => {
