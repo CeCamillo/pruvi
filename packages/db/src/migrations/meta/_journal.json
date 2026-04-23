@@ -8,6 +8,13 @@
       "when": 1776979033804,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776983983301,
+      "tag": "0001_roleta",
+      "breakpoints": true
     }
   ]
 }
