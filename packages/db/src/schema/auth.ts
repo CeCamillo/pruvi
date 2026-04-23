@@ -21,6 +21,7 @@ export const user = pgTable("user", {
   difficulties: jsonb("difficulties").$type<string[]>(),
   dailyStudyTime: text("daily_study_time"),
   onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
+  roletaSubjects: jsonb("roleta_subjects").$type<string[]>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
