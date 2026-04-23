@@ -32,7 +32,7 @@ function AuthGate() {
   const segments = useSegments();
   // Only fetch preferences once we have a session — the endpoint is auth-gated
   // and would 401 for unauthenticated users.
-  const prefs = usePreferences();
+  const prefs = usePreferences({ enabled: !!session });
 
   if (isPending) {
     return <LoadingScreen />;

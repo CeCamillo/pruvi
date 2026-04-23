@@ -8,11 +8,12 @@ import { onboardingService } from "@/services/onboarding.service";
 
 const PREFERENCES_KEY = ["preferences"] as const;
 
-export function usePreferences() {
+export function usePreferences(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: PREFERENCES_KEY,
     queryFn: onboardingService.getPreferences,
     staleTime: 5 * 60 * 1000,
+    enabled: options?.enabled ?? true,
   });
 }
 
