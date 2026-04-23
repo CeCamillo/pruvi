@@ -4,7 +4,7 @@
 >
 > This document maps every integration between `apps/native` and `apps/server`. All frontend work follows `apps/native/native_architecture.md` — that document is the single source of truth for how the native app is built.
 >
-> **Current status:** Phases 0-4 complete. **The 5 core MVP screens are wired end-to-end** — users sign up, start a daily session, answer SM-2 prioritized questions with animated feedback, earn XP, maintain streaks, and inspect per-subject progress + profile. Phase 5 (Onboarding Persistence) is next.
+> **Current status:** Phases 0-5 complete. Every authenticated core flow is wired end-to-end: sign up → onboarding (exam / timeline / difficulties / study time) → daily session → answer questions with SM-2 feedback + XP + streaks → per-subject progress + profile. Phase 6 (content features) is next.
 
 ---
 
@@ -500,7 +500,7 @@ useCalendar()    ──→ studied dates for calendar display (new hook, new ser
 
 ---
 
-### Phase 5: Onboarding Persistence ← NEXT
+### Phase 5: Onboarding Persistence ✅
 
 > **Goal:** New user onboarding choices are saved to the backend and respected on subsequent launches.
 >
@@ -518,7 +518,7 @@ useCalendar()    ──→ studied dates for calendar display (new hook, new ser
 
 ---
 
-### Phase 6: Content Features
+### Phase 6: Content Features ← NEXT
 
 > **Goal:** Additional study modes beyond the core daily session.
 >
