@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, integer, jsonb } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -14,6 +14,13 @@ export const user = pgTable("user", {
   livesResetAt: timestamp("lives_reset_at"),
   totalXp: integer("total_xp").notNull().default(0),
   currentLevel: integer("current_level").notNull().default(1),
+  // Onboarding preferences. Nullable until the user picks during onboarding;
+  // `onboarding_completed` is the single flag the auth guard checks.
+  selectedExam: text("selected_exam"),
+  prepTimeline: text("prep_timeline"),
+  difficulties: jsonb("difficulties").$type<string[]>(),
+  dailyStudyTime: text("daily_study_time"),
+  onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
