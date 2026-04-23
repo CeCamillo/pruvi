@@ -41,7 +41,7 @@ describe("ProgressRepository (integration)", () => {
 
   async function seedSubject(slug: string, name: string) {
     const [row] = await db.insert(subject).values({ slug, name }).returning();
-    return row;
+    return row!;
   }
 
   async function seedQuestion(subjectId: number, body: string) {
@@ -55,7 +55,7 @@ describe("ProgressRepository (integration)", () => {
         difficulty: 3,
       })
       .returning();
-    return row;
+    return row!;
   }
 
   async function seedReview(
@@ -142,10 +142,10 @@ describe("ProgressRepository (integration)", () => {
 
       const result = await repo.getSubjectReviews("u1", "biologia", 10);
       expect(result).toHaveLength(2);
-      expect(result[0].questionId).toBe(q2.id);
-      expect(result[0].quality).toBe(1);
-      expect(result[0].body).toBe("q2 body");
-      expect(result[1].questionId).toBe(q1.id);
+      expect(result[0]!.questionId).toBe(q2.id);
+      expect(result[0]!.quality).toBe(1);
+      expect(result[0]!.body).toBe("q2 body");
+      expect(result[1]!.questionId).toBe(q1.id);
     });
 
     it("respects the limit parameter", async () => {

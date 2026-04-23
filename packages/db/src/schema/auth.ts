@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, integer } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -7,6 +7,13 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  // Gamification state lives on the user row (hot path — read on every
+  // answer). `lives_reset_at` is null when the user has MAX_LIVES and
+  // set to a future timestamp when the first life was consumed.
+  lives: integer("lives").notNull().default(5),
+  livesResetAt: timestamp("lives_reset_at"),
+  totalXp: integer("total_xp").notNull().default(0),
+  currentLevel: integer("current_level").notNull().default(1),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

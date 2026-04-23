@@ -35,12 +35,13 @@ export class QuestionsRepository {
         .select({
           id: question.id,
           subjectId: question.subjectId,
-          content: question.content,
+          body: question.body,
           options: question.options,
           correctOptionIndex: question.correctOptionIndex,
           difficulty: question.difficulty,
           requiresCalculation: question.requiresCalculation,
           source: question.source,
+          createdAt: question.createdAt,
         })
         .from(reviewLog)
         .innerJoin(question, eq(reviewLog.questionId, question.id))
@@ -92,12 +93,13 @@ export class QuestionsRepository {
         .select({
           id: question.id,
           subjectId: question.subjectId,
-          content: question.content,
+          body: question.body,
           options: question.options,
           correctOptionIndex: question.correctOptionIndex,
           difficulty: question.difficulty,
           requiresCalculation: question.requiresCalculation,
           source: question.source,
+          createdAt: question.createdAt,
         })
         .from(reviewLog)
         .innerJoin(question, eq(reviewLog.questionId, question.id))

@@ -15,19 +15,22 @@ export class SessionsRepository {
       .where(
         and(
           eq(dailySession.userId, userId),
-          eq(sql`${dailySession.createdAt}::date`, sql`CURRENT_DATE`)
-        )
+          eq(dailySession.date, sql`CURRENT_DATE`),
+        ),
       )
       .limit(1);
 
     return rows[0] ?? null;
   }
 
-  /** Create a new daily session */
+  /** Create a new daily session for today */
   async createSession(userId: string) {
     const [row] = await this.db
       .insert(dailySession)
-      .values({ userId })
+      .values({
+        userId,
+        date: sql`CURRENT_DATE`,
+      })
       .returning();
     return row;
   }
@@ -36,14 +39,13 @@ export class SessionsRepository {
   async completeSession(
     sessionId: number,
     questionCount: number,
-    correctCount: number
+    correctCount: number,
   ) {
     const [row] = await this.db
       .update(dailySession)
       .set({
-        status: "completed",
-        questionCount,
-        correctCount,
+        questionsAnswered: questionCount,
+        questionsCorrect: correctCount,
         completedAt: new Date(),
       })
       .where(eq(dailySession.id, sessionId))

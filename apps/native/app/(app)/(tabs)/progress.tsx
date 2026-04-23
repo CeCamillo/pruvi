@@ -72,7 +72,6 @@ export default function ProgressScreen() {
       </View>
       <FlashList
         data={subjects}
-        estimatedItemSize={108}
         keyExtractor={(s) => s.slug}
         renderItem={renderItem}
         ListEmptyComponent={

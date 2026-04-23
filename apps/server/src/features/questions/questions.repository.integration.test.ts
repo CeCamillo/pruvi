@@ -39,66 +39,68 @@ describe("QuestionsRepository (integration)", () => {
 
   /** Seed 2 subjects and 6 questions with varying difficulty/requiresCalculation. */
   async function seedQuestionsData() {
-    const [subj1, subj2] = await db
+    const subjects = await db
       .insert(subject)
       .values([
         { name: "Math", slug: "math" },
         { name: "Physics", slug: "physics" },
       ])
       .returning();
+    const subj1 = subjects[0]!;
+    const subj2 = subjects[1]!;
 
     const questions = await db
       .insert(question)
       .values([
-        // 3 easy (2 theoretical, 1 requires calculation)
+        // 3 easy (difficulty=1): 2 theoretical, 1 requires calculation
         {
           subjectId: subj1.id,
-          content: "Easy Q1",
+          body: "Easy Q1",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 0,
-          difficulty: "easy" as const,
+          difficulty: 1,
           requiresCalculation: false,
         },
         {
           subjectId: subj1.id,
-          content: "Easy Q2",
+          body: "Easy Q2",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 1,
-          difficulty: "easy" as const,
+          difficulty: 1,
           requiresCalculation: false,
         },
         {
           subjectId: subj2.id,
-          content: "Easy Q3 (calc)",
+          body: "Easy Q3 (calc)",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 2,
-          difficulty: "easy" as const,
+          difficulty: 1,
           requiresCalculation: true,
         },
-        // 2 medium (1 theoretical, 1 requires calculation)
+        // 2 medium (difficulty=2): 1 theoretical, 1 requires calculation
         {
           subjectId: subj1.id,
-          content: "Medium Q4",
+          body: "Medium Q4",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 0,
-          difficulty: "medium" as const,
+          difficulty: 2,
           requiresCalculation: false,
         },
         {
           subjectId: subj2.id,
-          content: "Medium Q5 (calc)",
+          body: "Medium Q5 (calc)",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 3,
-          difficulty: "medium" as const,
+          difficulty: 2,
           requiresCalculation: true,
         },
-        // 1 hard (theoretical)
+        // 1 hard (difficulty=3, theoretical)
         {
           subjectId: subj2.id,
-          content: "Hard Q6",
+          body: "Hard Q6",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 1,
-          difficulty: "hard" as const,
+          difficulty: 3,
           requiresCalculation: false,
         },
       ])
@@ -125,6 +127,8 @@ describe("QuestionsRepository (integration)", () => {
     it("returns overdue questions before unseen ones", async () => {
       await seedUser();
       const { questions: seeded } = await seedQuestionsData();
+      const q0 = seeded[0]!;
+      const q1 = seeded[1]!;
 
       const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000); // yesterday
 
@@ -132,7 +136,7 @@ describe("QuestionsRepository (integration)", () => {
       await db.insert(reviewLog).values([
         {
           userId: "test-user-1",
-          questionId: seeded[0].id,
+          questionId: q0.id,
           quality: 3,
           easinessFactor: "2.50",
           interval: 1,
@@ -142,7 +146,7 @@ describe("QuestionsRepository (integration)", () => {
         },
         {
           userId: "test-user-1",
-          questionId: seeded[1].id,
+          questionId: q1.id,
           quality: 4,
           easinessFactor: "2.60",
           interval: 1,
@@ -155,8 +159,8 @@ describe("QuestionsRepository (integration)", () => {
       const result = await repo.selectQuestions("test-user-1", 10, "all");
 
       // Overdue questions should come first, most overdue first
-      expect(result[0].id).toBe(seeded[1].id); // 2 days overdue
-      expect(result[1].id).toBe(seeded[0].id); // 1 day overdue
+      expect(result[0]!.id).toBe(q1.id); // 2 days overdue
+      expect(result[1]!.id).toBe(q0.id); // 1 day overdue
 
       // All 6 should still be returned (2 overdue + 4 unseen)
       expect(result).toHaveLength(6);
@@ -200,14 +204,14 @@ describe("QuestionsRepository (integration)", () => {
       const [q] = await db
         .insert(question)
         .values({
-          subjectId: s.id,
+          subjectId: s!.id,
           body: "q",
           options: ["a", "b", "c", "d"],
           correctOptionIndex: 0,
           difficulty: 3,
         })
         .returning();
-      expect(await repo.getSubjectSlugForQuestion(q.id)).toBe("fisica");
+      expect(await repo.getSubjectSlugForQuestion(q!.id)).toBe("fisica");
     });
 
     it("returns null for unknown question id", async () => {

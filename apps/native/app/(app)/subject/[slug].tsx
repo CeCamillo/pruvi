@@ -91,7 +91,6 @@ export default function SubjectScreen() {
       <SubjectHeader subject={subject} />
       <FlashList
         data={reviews.data?.reviews ?? []}
-        estimatedItemSize={88}
         keyExtractor={(r, i) => `${r.questionId}-${i}`}
         renderItem={({ item }) => <ReviewHistoryItem review={item} />}
         ListEmptyComponent={

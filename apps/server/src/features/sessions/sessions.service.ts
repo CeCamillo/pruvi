@@ -29,7 +29,7 @@ export class SessionsService {
   > {
     // Check if there's already an active session today
     const existing = await this.repo.findTodaySession(userId);
-    if (existing && existing.status === "active") {
+    if (existing && existing.completedAt == null) {
       // Resume: always fetch fresh questions (cache is for new sessions)
       const questionsResult = await this.questionsService.selectForSession(
         userId,
@@ -39,7 +39,7 @@ export class SessionsService {
       return ok({ session: existing, questions: questionsResult.value });
     }
 
-    if (existing && existing.status === "completed") {
+    if (existing && existing.completedAt != null) {
       return err(
         new ValidationError("You already completed today's session")
       );
@@ -94,7 +94,7 @@ export class SessionsService {
     if (session.userId !== userId) {
       return err(new NotFoundError("Session not found"));
     }
-    if (session.status === "completed") {
+    if (session.completedAt != null) {
       return err(new ValidationError("Session already completed"));
     }
 
