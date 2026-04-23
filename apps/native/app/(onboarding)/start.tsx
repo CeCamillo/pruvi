@@ -11,9 +11,9 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Defs, Path, RadialGradient, Rect, Stop, Circle as SvgCircle } from "react-native-svg";
 
-import { OnboardingLayout } from "./components/onboarding-layout";
-import { PrimaryButton } from "./components/primary-button";
-import { ProgressBar } from "./components/progress-bar";
+import { OnboardingLayout } from "@/components/onboarding/onboarding-layout";
+import { PrimaryButton } from "@/components/onboarding/primary-button";
+import { ProgressBar } from "@/components/onboarding/progress-bar";
 
 function GraduationCapIcon() {
   return (

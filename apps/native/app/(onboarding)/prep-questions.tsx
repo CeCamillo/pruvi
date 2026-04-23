@@ -6,9 +6,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { PrepTimeline } from "@pruvi/shared";
 import { useOnboardingActions, useOnboardingStore } from "@/stores/onboardingStore";
 
-import { OnboardingHeader } from "./components/onboarding-header";
-import { PrimaryButton } from "./components/primary-button";
-import { RadioOption } from "./components/radio-option";
+import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
+import { PrimaryButton } from "@/components/onboarding/primary-button";
+import { RadioOption } from "@/components/onboarding/radio-option";
 
 const OPTIONS: { id: PrepTimeline; label: string }[] = [
   { id: "3m", label: "Até 3 meses" },

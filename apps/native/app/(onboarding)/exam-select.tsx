@@ -7,9 +7,9 @@ import Svg, { Path } from "react-native-svg";
 import type { Exam } from "@pruvi/shared";
 import { useOnboardingActions, useOnboardingStore } from "@/stores/onboardingStore";
 
-import { ExamCard } from "./components/exam-card";
-import { OnboardingHeader } from "./components/onboarding-header";
-import { PrimaryButton } from "./components/primary-button";
+import { ExamCard } from "@/components/onboarding/exam-card";
+import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
+import { PrimaryButton } from "@/components/onboarding/primary-button";
 
 // --- Exam Icons (inline SVG) ---
 

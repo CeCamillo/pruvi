@@ -7,9 +7,9 @@ import type { DailyStudyTime } from "@pruvi/shared";
 import { useCompleteOnboarding } from "@/hooks/useOnboarding";
 import { useOnboardingActions, useOnboardingStore } from "@/stores/onboardingStore";
 
-import { OnboardingHeader } from "./components/onboarding-header";
-import { PrimaryButton } from "./components/primary-button";
-import { TimeOption } from "./components/time-option";
+import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
+import { PrimaryButton } from "@/components/onboarding/primary-button";
+import { TimeOption } from "@/components/onboarding/time-option";
 
 const OPTIONS: { id: DailyStudyTime; label: string; tag: string }[] = [
   { id: "30min", label: "30 minutos / dia", tag: "Casual" },
