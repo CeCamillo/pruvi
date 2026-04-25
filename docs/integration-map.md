@@ -1,10 +1,10 @@
 # Pruvi Integration Map
 
-> Last updated: 2026-04-23
+> Last updated: 2026-04-24
 >
 > This document maps every integration between `apps/native` and `apps/server`. All frontend work follows `apps/native/native_architecture.md` — that document is the single source of truth for how the native app is built.
 >
-> **Current status:** Phases 0-5 complete. Every authenticated core flow is wired end-to-end: sign up → onboarding (exam / timeline / difficulties / study time) → daily session → answer questions with SM-2 feedback + XP + streaks → per-subject progress + profile. Phase 6 (content features) is next.
+> **Current status:** Phases 0-5 + 6.1 complete. Every authenticated core flow is wired end-to-end: sign up → onboarding → daily session → answer questions with SM-2 feedback + XP + streaks → per-subject progress + profile + Roleta free-play (configurar pool, 3-question mini-set, half XP, no lives, hybrid review_log logging). Phase 6.2 (Flashcards) is next.
 
 ---
 
@@ -518,7 +518,7 @@ useCalendar()    ──→ studied dates for calendar display (new hook, new ser
 
 ---
 
-### Phase 6: Content Features ← NEXT
+### Phase 6: Content Features
 
 > **Goal:** Additional study modes beyond the core daily session.
 >
@@ -526,8 +526,8 @@ useCalendar()    ──→ studied dates for calendar display (new hook, new ser
 
 | # | Feature | Backend scope | Frontend scope |
 |---|---------|--------------|----------------|
-| 6.1 | **Roleta configuration** (subject filter for sessions) | Extend `POST /sessions/start` to accept `subjectIds[]`, store preference | `services/session.service.ts` extended, config screen |
-| 6.2 | **Flashcards** | Design decision: reuse SM-2 engine with card UI, or separate deck/card schema | `services/flashcard.service.ts`, `hooks/useFlashcards.ts`, new screens |
+| 6.1 ✅ | **Roleta** (subject-random free-play) | New `/roleta/{config,spin,answer}` endpoints; `user.roleta_subjects` jsonb; `review_log.source='roleta'` with null `next_review_at` (hybrid logging — counts for accuracy, doesn't feed SM-2). Half XP, no lives consumed. | `services/roleta.service.ts`, `hooks/useRoleta.ts`, `stores/roletaStore.ts`, `app/(app)/roleta/{index,configurar,play,result}.tsx` |
+| 6.2 ← NEXT | **Flashcards** | Design decision: reuse SM-2 engine with card UI, or separate deck/card schema | `services/flashcard.service.ts`, `hooks/useFlashcards.ts`, new screens |
 | 6.3 | **Simulados** (timed mock exams) | Timed session variant, simulado → question mapping | `services/simulado.service.ts`, `hooks/useSimulado.ts`, new screens |
 | 6.4 | **Learning Trails** | Large: trail → unit → lesson → progress schema, 4+ endpoints, content | `services/trail.service.ts`, `hooks/useTrail.ts`, new screens |
 
