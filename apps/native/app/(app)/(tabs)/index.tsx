@@ -96,20 +96,6 @@ function FlashcardIcon() {
   );
 }
 
-function SwordIcon() {
-  return (
-    <Svg width={28} height={28} viewBox="0 0 28 28" fill="none">
-      <Path
-        d="M6 22l3-3m0 0l8-8m-8 8l-3 0m3 0l0 3M22 6l-8 8m8-8l-2 0m2 0l0 2"
-        stroke="#FF9600"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
 function SparkleIcon({ size = 16 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
@@ -301,11 +287,13 @@ function PracticaCard({
   subtitle,
   bgColor,
   icon,
+  onPress,
 }: {
   title: string;
   subtitle: string;
   bgColor: string;
   icon: React.ReactNode;
+  onPress?: () => void;
 }) {
   return (
     <Pressable
@@ -313,6 +301,7 @@ function PracticaCard({
         styles.practicaCard,
         pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
       ]}
+      onPress={onPress}
     >
       <View style={[styles.practicaIconContainer, { backgroundColor: bgColor }]}>
         {icon}
@@ -322,6 +311,21 @@ function PracticaCard({
         <Text style={styles.practicaSubtitle}>{subtitle}</Text>
       </View>
     </Pressable>
+  );
+}
+
+function WheelSmallIcon() {
+  return (
+    <Svg width={28} height={28} viewBox="0 0 28 28" fill="none">
+      <SvgCircle cx={14} cy={14} r={10} stroke="#58CD04" strokeWidth={2} />
+      <Path
+        d="M14 4v20M4 14h20M6 6l16 16M22 6L6 22"
+        stroke="#58CD04"
+        strokeWidth={1}
+        strokeOpacity={0.4}
+      />
+      <SvgCircle cx={14} cy={14} r={3} fill="#58CD04" />
+    </Svg>
   );
 }
 
@@ -540,15 +544,16 @@ export default function Home() {
           <View style={styles.practicaRow}>
             <PracticaCard
               title="Flashcards"
-              subtitle="Revisão Rápida"
+              subtitle="Em breve"
               bgColor="#FEF9C2"
               icon={<FlashcardIcon />}
             />
             <PracticaCard
-              title="Desafios"
-              subtitle="Gere 2x XP"
-              bgColor="rgba(255, 150, 0, 0.1)"
-              icon={<SwordIcon />}
+              title="Roleta"
+              subtitle="3 questões aleatórias"
+              bgColor="rgba(88, 205, 4, 0.1)"
+              icon={<WheelSmallIcon />}
+              onPress={() => router.push("/roleta")}
             />
           </View>
         </View>
