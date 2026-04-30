@@ -476,7 +476,14 @@ export default function ProfileScreen() {
             <Pressable style={styles.topBarBtn}>
               <ShareIcon />
             </Pressable>
-            <Pressable style={styles.topBarBtnGray} onPress={onSair}>
+            <Pressable
+              style={styles.topBarBtnGray}
+              accessibilityRole="button"
+              accessibilityLabel="Configurações"
+              onPress={() => {
+                // TODO: open settings route once it exists.
+              }}
+            >
               <SettingsIcon />
             </Pressable>
           </View>
