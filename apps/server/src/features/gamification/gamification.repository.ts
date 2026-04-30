@@ -20,17 +20,19 @@ export class GamificationRepository {
     return rows[0] ?? null;
   }
 
-  /** Award XP and update level atomically */
+  /** Award XP and update level atomically, incrementing both totalXp and weeklyXp */
   async awardXp(userId: string, xpAmount: number, newLevel: number) {
     const [row] = await this.db
       .update(user)
       .set({
         totalXp: sql`${user.totalXp} + ${xpAmount}`,
+        weeklyXp: sql`${user.weeklyXp} + ${xpAmount}`,
         currentLevel: newLevel,
       })
       .where(eq(user.id, userId))
       .returning({
         totalXp: user.totalXp,
+        weeklyXp: user.weeklyXp,
         currentLevel: user.currentLevel,
       });
     return row;

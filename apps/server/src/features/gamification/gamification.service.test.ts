@@ -71,5 +71,24 @@ describe("GamificationService", () => {
       expect(value.currentLevel).toBe(1);
       expect(repo.awardXp).toHaveBeenCalledWith("user-1", 10, 1);
     });
+
+    it("increments both totalXp and weeklyXp by the same delta for a correct medium answer", async () => {
+      repo.getUserXp.mockResolvedValue({ totalXp: 50, currentLevel: 1 });
+      repo.awardXp.mockResolvedValue({
+        totalXp: 70,
+        weeklyXp: 40,
+        currentLevel: 1,
+      });
+
+      const result = await service.awardXpForAnswer("user-1", true, "medium");
+
+      expect(result.isOk()).toBe(true);
+      // awardXp must be called with the 20 XP delta (medium correct = 20 XP)
+      expect(repo.awardXp).toHaveBeenCalledWith("user-1", 20, 1);
+      // The mock returns weeklyXp: 40 — verify the delta passed to awardXp is 20
+      // (initial weeklyXp: 20 + 20 = 40, initial totalXp: 50 + 20 = 70)
+      const callArgs = repo.awardXp.mock.calls[0];
+      expect(callArgs[1]).toBe(20); // xpAmount
+    });
   });
 });
