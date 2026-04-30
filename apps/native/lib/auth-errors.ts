@@ -1,26 +1,28 @@
 const FALLBACK = "Algo deu errado. Tente novamente.";
 
-const CODE_MAP: Record<string, string> = {
+const CODE_MAP = {
   INVALID_EMAIL_OR_PASSWORD: "Email ou senha incorretos.",
   USER_ALREADY_EXISTS: "Já existe uma conta com esse email.",
   PASSWORD_TOO_SHORT: "Senha muito curta. Use ao menos 8 caracteres.",
   EMAIL_NOT_VERIFIED: "Confirme seu email antes de entrar.",
   USER_NOT_FOUND: "Não encontramos uma conta com esse email.",
   TOO_MANY_REQUESTS: "Muitas tentativas. Aguarde um instante e tente de novo.",
-};
+} as const satisfies Record<string, string>;
+
+function readString(obj: object, key: string): string | null {
+  if (!(key in obj)) return null;
+  const val = (obj as Record<string, unknown>)[key];
+  return typeof val === "string" && val.length > 0 ? val : null;
+}
 
 export function getAuthErrorMessage(error: unknown): string {
   if (!error || typeof error !== "object") return FALLBACK;
 
-  const code = "code" in error && typeof (error as Record<string, unknown>).code === "string"
-    ? (error as Record<string, unknown>).code as string
-    : null;
-  if (code && CODE_MAP[code]) return CODE_MAP[code];
+  const code = readString(error, "code");
+  if (code && code in CODE_MAP) return CODE_MAP[code as keyof typeof CODE_MAP];
 
-  const message = "message" in error && typeof (error as Record<string, unknown>).message === "string"
-    ? (error as Record<string, unknown>).message as string
-    : null;
-  if (message && message.length > 0) return message;
+  const message = readString(error, "message");
+  if (message) return message;
 
   return FALLBACK;
 }

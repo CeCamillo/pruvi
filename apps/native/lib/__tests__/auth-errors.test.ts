@@ -17,6 +17,21 @@ describe("getAuthErrorMessage", () => {
       .toBe("Senha muito curta. Use ao menos 8 caracteres.");
   });
 
+  it("maps EMAIL_NOT_VERIFIED to Portuguese", () => {
+    expect(getAuthErrorMessage({ code: "EMAIL_NOT_VERIFIED" }))
+      .toBe("Confirme seu email antes de entrar.");
+  });
+
+  it("maps USER_NOT_FOUND to Portuguese", () => {
+    expect(getAuthErrorMessage({ code: "USER_NOT_FOUND" }))
+      .toBe("Não encontramos uma conta com esse email.");
+  });
+
+  it("maps TOO_MANY_REQUESTS to Portuguese", () => {
+    expect(getAuthErrorMessage({ code: "TOO_MANY_REQUESTS" }))
+      .toBe("Muitas tentativas. Aguarde um instante e tente de novo.");
+  });
+
   it("falls back to a generic message on unknown codes", () => {
     expect(getAuthErrorMessage({ code: "SOMETHING_WEIRD" }))
       .toBe("Algo deu errado. Tente novamente.");
