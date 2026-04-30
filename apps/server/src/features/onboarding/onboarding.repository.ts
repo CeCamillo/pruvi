@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import { user } from "@pruvi/db/schema/auth";
 import type { db } from "@pruvi/db";
 import type {
-  DailyStudyTime,
   Exam,
   PrepTimeline,
   StudyDifficulty,
@@ -14,7 +13,7 @@ export type PreferencesRow = {
   selectedExam: Exam | null;
   prepTimeline: PrepTimeline | null;
   difficulties: StudyDifficulty[] | null;
-  dailyStudyTime: DailyStudyTime | null;
+  dailyGoalMinutes: number | null;
   onboardingCompleted: boolean;
 };
 
@@ -22,7 +21,7 @@ export type PreferencesPatch = {
   selectedExam?: Exam;
   prepTimeline?: PrepTimeline;
   difficulties?: StudyDifficulty[];
-  dailyStudyTime?: DailyStudyTime;
+  dailyGoalMinutes?: number | null;
 };
 
 export class OnboardingRepository {
@@ -34,7 +33,7 @@ export class OnboardingRepository {
         selectedExam: user.selectedExam,
         prepTimeline: user.prepTimeline,
         difficulties: user.difficulties,
-        dailyStudyTime: user.dailyStudyTime,
+        dailyGoalMinutes: user.dailyGoalMinutes,
         onboardingCompleted: user.onboardingCompleted,
       })
       .from(user)

@@ -15,6 +15,13 @@
       "when": 1776983983301,
       "tag": "0001_roleta",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1746057600000,
+      "tag": "0002_user_profile_bundle",
+      "breakpoints": true
     }
   ]
 }
