@@ -41,6 +41,13 @@ export const onboardingRoutes: FastifyPluginAsyncZod = async (fastify) => {
         request.userId,
         request.body
       );
+      // Swallow cache failures — stale data self-heals via TTL.
+      await fastify.cache.del(`me:${request.userId}`).catch((err: unknown) => {
+        fastify.log.warn(
+          { err, userId: request.userId },
+          "preferences cache invalidation failed",
+        );
+      });
       return unwrapResult(result);
     }
   );
@@ -60,6 +67,13 @@ export const onboardingRoutes: FastifyPluginAsyncZod = async (fastify) => {
         request.userId,
         request.body
       );
+      // Swallow cache failures — stale data self-heals via TTL.
+      await fastify.cache.del(`me:${request.userId}`).catch((err: unknown) => {
+        fastify.log.warn(
+          { err, userId: request.userId },
+          "onboarding-complete cache invalidation failed",
+        );
+      });
       return unwrapResult(result);
     }
   );

@@ -43,6 +43,7 @@ export const reviewsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         const slug = await questionsRepo.getSubjectSlugForQuestion(questionId);
         const invalidations: Promise<unknown>[] = [
           fastify.cache.del(`lives:${request.userId}`),
+          fastify.cache.del(`me:${request.userId}`),
           fastify.cache.del(`xp:${request.userId}`),
           fastify.cache.del(`progress:${request.userId}`),
         ];

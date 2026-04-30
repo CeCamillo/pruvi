@@ -104,6 +104,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       try {
         const currentMonthKey = `calendar:${request.userId}:${formatMonth(new Date())}`;
         await Promise.allSettled([
+          fastify.cache.del(`me:${request.userId}`),
           fastify.cache.del(`session-today:${request.userId}`),
           fastify.cache.del(`streaks:${request.userId}`),
           fastify.cache.del(`progress:${request.userId}`),
