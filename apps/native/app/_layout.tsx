@@ -37,11 +37,11 @@ function AuthGate() {
     {
       isPending: session.isPending,
       error: session.error,
-      data: session.data ?? null,
+      data: session.data,
     },
     {
       isPending: prefs.isPending,
-      data: prefs.data ?? undefined,
+      data: prefs.data,
     },
     segments
   );

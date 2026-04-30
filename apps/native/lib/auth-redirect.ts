@@ -2,7 +2,7 @@ import type { Href } from "expo-router";
 
 type SessionState = {
   isPending: boolean;
-  error: unknown;
+  error: Error | null;
   data: { user: { id: string } } | null;
 };
 
