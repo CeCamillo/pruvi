@@ -45,7 +45,7 @@ describe("SessionsRepository (integration)", () => {
 
       expect(found).not.toBeNull();
       expect(found!.userId).toBe("test-user-1");
-      expect(found!.status).toBe("active");
+      expect(found!.completedAt).toBeNull();
     });
 
     it("returns null when no session exists today", async () => {
@@ -59,14 +59,14 @@ describe("SessionsRepository (integration)", () => {
     it("does not return a session from yesterday", async () => {
       await seedUser();
 
-      // Insert a session and manually backdate its createdAt to yesterday
+      // Insert a session dated yesterday
       const [session] = await db
         .insert(dailySession)
-        .values({ userId: "test-user-1" })
+        .values({ userId: "test-user-1", date: sql`CURRENT_DATE` })
         .returning();
 
       await db.execute(
-        sql`UPDATE daily_session SET created_at = NOW() - INTERVAL '1 day' WHERE id = ${session.id}`
+        sql`UPDATE daily_session SET date = CURRENT_DATE - INTERVAL '1 day' WHERE id = ${session!.id}`
       );
 
       const found = await repo.findTodaySession("test-user-1");
@@ -82,19 +82,17 @@ describe("SessionsRepository (integration)", () => {
       const created = await repo.createSession("test-user-1");
 
       expect(created).toBeDefined();
-      expect(created.userId).toBe("test-user-1");
-      expect(created.status).toBe("active");
-      expect(created.questionCount).toBe(0);
-      expect(created.correctCount).toBe(0);
-      expect(created.completedAt).toBeNull();
+      expect(created!.userId).toBe("test-user-1");
+      expect(created!.completedAt).toBeNull();
+      expect(created!.questionsAnswered).toBe(0);
+      expect(created!.questionsCorrect).toBe(0);
 
-      const completed = await repo.completeSession(created.id, 10, 8);
+      const completed = await repo.completeSession(created!.id, 10, 8);
 
       expect(completed).toBeDefined();
-      expect(completed.status).toBe("completed");
-      expect(completed.questionCount).toBe(10);
-      expect(completed.correctCount).toBe(8);
-      expect(completed.completedAt).toBeInstanceOf(Date);
+      expect(completed!.completedAt).toBeInstanceOf(Date);
+      expect(completed!.questionsAnswered).toBe(10);
+      expect(completed!.questionsCorrect).toBe(8);
     });
   });
 
@@ -103,10 +101,10 @@ describe("SessionsRepository (integration)", () => {
       await seedUser();
       const created = await repo.createSession("test-user-1");
 
-      const found = await repo.findSessionById(created.id);
+      const found = await repo.findSessionById(created!.id);
 
       expect(found).not.toBeNull();
-      expect(found!.id).toBe(created.id);
+      expect(found!.id).toBe(created!.id);
       expect(found!.userId).toBe("test-user-1");
     });
 

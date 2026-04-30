@@ -46,25 +46,22 @@ describe("ReviewsRepository (integration)", () => {
     const [q] = await db
       .insert(question)
       .values({
-        subjectId: subj.id,
-        content: "What is 2+2?",
+        subjectId: subj!.id,
+        body: "What is 2+2?",
         options: ["3", "4", "5", "6"],
         correctOptionIndex: 1,
-        difficulty: "easy" as const,
+        difficulty: 1,
         requiresCalculation: false,
       })
       .returning();
 
-    return q;
+    return q!;
   }
 
   describe("insertReview + findLatestReview", () => {
     it("returns the most recent review for a user+question pair", async () => {
       await seedUser();
       const q = await seedQuestion();
-
-      const olderDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const newerDate = new Date();
 
       await repo.insertReview({
         userId: "test-user-1",
@@ -117,7 +114,7 @@ describe("ReviewsRepository (integration)", () => {
         .select({ totalXp: user.totalXp })
         .from(user)
         .where(eq(user.id, "test-user-1"));
-      expect(before[0].totalXp).toBe(0);
+      expect(before[0]!.totalXp).toBe(0);
 
       await repo.awardXp("test-user-1", 10);
 
@@ -125,7 +122,7 @@ describe("ReviewsRepository (integration)", () => {
         .select({ totalXp: user.totalXp })
         .from(user)
         .where(eq(user.id, "test-user-1"));
-      expect(after1[0].totalXp).toBe(10);
+      expect(after1[0]!.totalXp).toBe(10);
 
       await repo.awardXp("test-user-1", 20);
 
@@ -133,7 +130,7 @@ describe("ReviewsRepository (integration)", () => {
         .select({ totalXp: user.totalXp })
         .from(user)
         .where(eq(user.id, "test-user-1"));
-      expect(after2[0].totalXp).toBe(30);
+      expect(after2[0]!.totalXp).toBe(30);
     });
   });
 

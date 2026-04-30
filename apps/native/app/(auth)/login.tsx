@@ -1,33 +1,110 @@
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Button,
-  FieldError,
-  Input,
-  Label,
-  Spinner,
-  Surface,
-  TextField,
-  useToast,
-} from "heroui-native";
-import { useRef } from "react";
-import { Text, TextInput, View } from "react-native";
 import { Link } from "expo-router";
+import { useRef, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Path, Rect } from "react-native-svg";
 import { z } from "zod";
 
-import { Screen } from "@/components/common/Screen";
 import { authService } from "@/services/auth.service";
+import { getAuthErrorMessage } from "@/lib/auth-errors";
 
 const loginSchema = z.object({
-  email: z.string().trim().min(1, "Email is required").email("Enter a valid email address"),
-  password: z.string().min(1, "Password is required").min(8, "Use at least 8 characters"),
+  email: z
+    .string()
+    .trim()
+    .min(1, "Informe seu email")
+    .email("Email inválido"),
+  password: z
+    .string()
+    .min(1, "Informe sua senha")
+    .min(8, "Use ao menos 8 caracteres"),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
 
+// ─── Icons ───────────────────────────────────────────────────────────────────
+
+function PruviLogo() {
+  return (
+    <View style={styles.logoIcon}>
+      <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M12 2L4 6.5V11c0 5.25 3.4 10.15 8 11.5 4.6-1.35 8-6.25 8-11.5V6.5L12 2z"
+          fill="#58CD04"
+        />
+        <Path
+          d="M10 12l2 2 4-4"
+          stroke="#FFFFFF"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    </View>
+  );
+}
+
+function EyeIcon({ open }: { open: boolean }) {
+  return open ? (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"
+        stroke="#6B6B6B"
+        strokeWidth={1.5}
+      />
+      <Path
+        d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+        stroke="#6B6B6B"
+        strokeWidth={1.5}
+      />
+    </Svg>
+  ) : (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19M14.12 14.12a3 3 0 11-4.24-4.24M1 1l22 22"
+        stroke="#6B6B6B"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+function MailIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Rect x={2} y={4} width={20} height={16} rx={2} stroke="#6B6B6B" strokeWidth={1.5} />
+      <Path d="M2 7l10 6 10-6" stroke="#6B6B6B" strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Rect x={4} y={11} width={16} height={10} rx={2} stroke="#6B6B6B" strokeWidth={1.5} />
+      <Path d="M8 11V7a4 4 0 018 0v4" stroke="#6B6B6B" strokeWidth={1.5} />
+    </Svg>
+  );
+}
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
+
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const passwordRef = useRef<TextInput>(null);
-  const { toast } = useToast();
+  const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const {
     control,
@@ -40,37 +117,49 @@ export default function LoginScreen() {
   });
 
   const onSubmit = async (data: LoginForm) => {
+    setFormError(null);
     const result = await authService.login(data.email.trim(), data.password);
-
     if (result.error) {
-      toast.show({
-        variant: "danger",
-        label: result.error.message || "Failed to sign in",
-      });
+      setFormError(getAuthErrorMessage(result.error));
     } else {
       reset();
-      toast.show({ variant: "success", label: "Signed in successfully" });
     }
   };
 
   return (
-    <Screen>
-      <View className="flex-1 justify-center">
-        <Surface variant="secondary" className="p-4 rounded-lg">
-          <Text className="text-foreground font-medium mb-4">Sign In</Text>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={[styles.content, { paddingTop: insets.top + 40 }]}>
+        <View style={styles.header}>
+          <PruviLogo />
+          <Text style={styles.brand}>Pruvi</Text>
+          <Text style={styles.title}>Bem-vindo de volta</Text>
+          <Text style={styles.subtitle}>Entre para continuar sua jornada.</Text>
+        </View>
 
-          <View className="gap-3">
-            <Controller
-              control={control}
-              name="email"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <TextField isInvalid={!!errors.email}>
-                  <Label>Email</Label>
-                  <Input
+        <View style={styles.form}>
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Email</Text>
+                <View
+                  style={[
+                    styles.inputWrap,
+                    errors.email && styles.inputWrapError,
+                  ]}
+                >
+                  <MailIcon />
+                  <TextInput
+                    style={styles.input}
                     value={value}
                     onBlur={onBlur}
                     onChangeText={onChange}
-                    placeholder="email@example.com"
+                    placeholder="voce@exemplo.com"
+                    placeholderTextColor="#9CA3AF"
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoComplete="email"
@@ -79,50 +168,227 @@ export default function LoginScreen() {
                     blurOnSubmit={false}
                     onSubmitEditing={() => passwordRef.current?.focus()}
                   />
-                  <FieldError>{errors.email?.message}</FieldError>
-                </TextField>
-              )}
-            />
+                </View>
+                {errors.email && (
+                  <Text style={styles.fieldError}>{errors.email.message}</Text>
+                )}
+              </View>
+            )}
+          />
 
-            <Controller
-              control={control}
-              name="password"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <TextField isInvalid={!!errors.password}>
-                  <Label>Password</Label>
-                  <Input
+          <Controller
+            control={control}
+            name="password"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Senha</Text>
+                <View
+                  style={[
+                    styles.inputWrap,
+                    errors.password && styles.inputWrapError,
+                  ]}
+                >
+                  <LockIcon />
+                  <TextInput
                     ref={passwordRef}
+                    style={styles.input}
                     value={value}
                     onBlur={onBlur}
                     onChangeText={onChange}
                     placeholder="••••••••"
-                    secureTextEntry
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry={!showPassword}
                     autoComplete="password"
                     textContentType="password"
                     returnKeyType="go"
                     onSubmitEditing={handleSubmit(onSubmit)}
                   />
-                  <FieldError>{errors.password?.message}</FieldError>
-                </TextField>
-              )}
-            />
+                  <Pressable
+                    onPress={() => setShowPassword((p) => !p)}
+                    hitSlop={8}
+                  >
+                    <EyeIcon open={showPassword} />
+                  </Pressable>
+                </View>
+                {errors.password && (
+                  <Text style={styles.fieldError}>
+                    {errors.password.message}
+                  </Text>
+                )}
+              </View>
+            )}
+          />
 
-            <Button onPress={handleSubmit(onSubmit)} isDisabled={isSubmitting} className="mt-1">
-              {isSubmitting ? (
-                <Spinner size="sm" color="default" />
-              ) : (
-                <Button.Label>Sign In</Button.Label>
-              )}
-            </Button>
-          </View>
+          {formError && (
+            <View style={styles.formErrorBox}>
+              <Text style={styles.formErrorText}>{formError}</Text>
+            </View>
+          )}
 
-          <Link href="/(auth)/register" asChild>
-            <Text className="text-primary text-center mt-4">
-              Don't have an account? Sign Up
+          <Pressable
+            style={({ pressed }) => [
+              styles.submitBtn,
+              isSubmitting && styles.submitBtnDisabled,
+              pressed && !isSubmitting && { opacity: 0.9 },
+            ]}
+            onPress={handleSubmit(onSubmit)}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.submitBtnText}>
+              {isSubmitting ? "ENTRANDO..." : "ENTRAR"}
             </Text>
-          </Link>
-        </Surface>
+          </Pressable>
+        </View>
       </View>
-    </Screen>
+
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        <Text style={styles.footerText}>Ainda não tem conta?</Text>
+        <Link href="/(auth)/register" asChild>
+          <Pressable hitSlop={8}>
+            <Text style={styles.footerLink}>Criar conta</Text>
+          </Pressable>
+        </Link>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
+  content: {
+    flex: 1,
+    paddingHorizontal: 32,
+    justifyContent: "center",
+  },
+  header: { alignItems: "center", gap: 6, marginBottom: 40 },
+  logoIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "rgba(88, 205, 4, 0.3)",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
+    elevation: 6,
+    marginBottom: 12,
+  },
+  brand: {
+    fontWeight: "900",
+    fontSize: 14,
+    letterSpacing: 3,
+    textTransform: "uppercase",
+    color: "#58CD04",
+  },
+  title: {
+    fontWeight: "900",
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.7,
+    color: "#2B2B2B",
+    marginTop: 10,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontWeight: "700",
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#6B6B6B",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  form: { gap: 14 },
+  field: { gap: 6 },
+  fieldLabel: {
+    fontWeight: "900",
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: "#6B6B6B",
+  },
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(240, 240, 240, 0.5)",
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "rgba(239, 236, 236, 0.8)",
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputWrapError: {
+    borderColor: "#EF4444",
+    backgroundColor: "rgba(239, 68, 68, 0.05)",
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#2B2B2B",
+  },
+  fieldError: {
+    fontWeight: "700",
+    fontSize: 11,
+    color: "#EF4444",
+    marginLeft: 4,
+  },
+  formErrorBox: {
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 4,
+  },
+  formErrorText: {
+    fontWeight: "700",
+    fontSize: 13,
+    color: "#EF4444",
+    textAlign: "center",
+  },
+  submitBtn: {
+    marginTop: 12,
+    height: 56,
+    backgroundColor: "#58CD04",
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "rgba(88, 205, 4, 0.3)",
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 1,
+    shadowRadius: 22,
+    elevation: 6,
+  },
+  submitBtnDisabled: {
+    backgroundColor: "#B8E890",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  submitBtnText: {
+    fontWeight: "900",
+    fontSize: 14,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    color: "#FFFFFF",
+  },
+  footer: {
+    paddingTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  footerText: {
+    fontWeight: "700",
+    fontSize: 13,
+    color: "#6B6B6B",
+  },
+  footerLink: {
+    fontWeight: "900",
+    fontSize: 13,
+    color: "#58CD04",
+  },
+});

@@ -27,8 +27,9 @@ export const reviewLog = pgTable(
     }).notNull(),
     interval: integer("interval").notNull(),
     repetitions: integer("repetitions").notNull(),
-    nextReviewAt: timestamp("next_review_at").notNull(),
+    nextReviewAt: timestamp("next_review_at"),
     reviewedAt: timestamp("reviewed_at").defaultNow().notNull(),
+    source: text("source"),
   },
   (table) => [
     index("review_log_user_next_review_idx").on(

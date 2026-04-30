@@ -6,16 +6,16 @@ import { ValidationError, NotFoundError } from "../../utils/errors";
 const mockSession = {
   id: 1,
   userId: "user-1",
-  status: "active" as const,
-  questionCount: null,
-  correctCount: null,
-  completedAt: null,
+  date: "2026-04-16",
+  questionsAnswered: 0,
+  questionsCorrect: 0,
+  completedAt: null as Date | null,
   createdAt: new Date(),
 };
 
 const mockQuestions = [
-  { id: 1, subjectId: 1, content: "Q1", options: ["a", "b", "c", "d"], difficulty: "easy" as const, requiresCalculation: false, source: null },
-  { id: 2, subjectId: 1, content: "Q2", options: ["a", "b", "c", "d"], difficulty: "medium" as const, requiresCalculation: false, source: null },
+  { id: 1, subjectId: 1, body: "Q1", options: ["a", "b", "c", "d"], correctOptionIndex: 0, difficulty: 1, requiresCalculation: false, source: null, createdAt: new Date() },
+  { id: 2, subjectId: 1, body: "Q2", options: ["a", "b", "c", "d"], correctOptionIndex: 0, difficulty: 3, requiresCalculation: false, source: null, createdAt: new Date() },
 ];
 
 function createMocks() {
@@ -57,7 +57,7 @@ describe("SessionsService", () => {
     });
 
     it("resumes an active session and fetches fresh questions", async () => {
-      const existingSession = { ...mockSession, status: "active" as const };
+      const existingSession = { ...mockSession, completedAt: null };
       repo.findTodaySession.mockResolvedValue(existingSession);
       questionsService.selectForSession.mockResolvedValue(ok(mockQuestions));
 
@@ -71,7 +71,7 @@ describe("SessionsService", () => {
     });
 
     it("returns ValidationError for a completed session", async () => {
-      repo.findTodaySession.mockResolvedValue({ ...mockSession, status: "completed" });
+      repo.findTodaySession.mockResolvedValue({ ...mockSession, completedAt: new Date() });
 
       const result = await service.startSession("user-1", "all");
 
@@ -114,8 +114,8 @@ describe("SessionsService", () => {
 
   describe("completeSession", () => {
     it("marks session as completed", async () => {
-      const activeSession = { ...mockSession, status: "active", userId: "user-1" };
-      const completedSession = { ...mockSession, status: "completed", questionCount: 10, correctCount: 8, completedAt: new Date() };
+      const activeSession = { ...mockSession, completedAt: null, userId: "user-1" };
+      const completedSession = { ...mockSession, questionsAnswered: 10, questionsCorrect: 8, completedAt: new Date() };
       repo.findSessionById.mockResolvedValue(activeSession);
       repo.completeSession.mockResolvedValue(completedSession);
 
@@ -136,7 +136,7 @@ describe("SessionsService", () => {
     });
 
     it("returns ValidationError when session is already completed", async () => {
-      repo.findSessionById.mockResolvedValue({ ...mockSession, status: "completed", userId: "user-1" });
+      repo.findSessionById.mockResolvedValue({ ...mockSession, completedAt: new Date(), userId: "user-1" });
 
       const result = await service.completeSession("user-1", 1, 10, 8);
 

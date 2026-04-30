@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { sql } from "drizzle-orm";
 import * as schema from "@pruvi/db/schema/index";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const TEST_DATABASE_URL =
@@ -24,28 +24,32 @@ export function getTestDb() {
   return drizzle(getTestPool(), { schema });
 }
 
-/** Push schema to test database by running the migration SQL. */
+/** Push schema to test database by applying every migration in order. */
 export async function setupTestDb() {
   const testPool = getTestPool();
-  const migrationPath = resolve(
+
+  // Reset schema to ensure a clean slate — handles migration consolidations
+  // and schema drift between test runs.
+  await testPool.query("DROP SCHEMA public CASCADE");
+  await testPool.query("CREATE SCHEMA public");
+
+  const migrationsDir = resolve(
     import.meta.dirname ?? ".",
-    "../../../../packages/db/src/migrations/0000_tranquil_blockbuster.sql"
+    "../../../../packages/db/src/migrations"
   );
-  const migrationSql = readFileSync(migrationPath, "utf-8");
+  const files = readdirSync(migrationsDir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
 
-  const statements = migrationSql
-    .split("--> statement-breakpoint")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  for (const file of files) {
+    const sqlText = readFileSync(resolve(migrationsDir, file), "utf-8");
+    const statements = sqlText
+      .split("--> statement-breakpoint")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-  for (const statement of statements) {
-    try {
+    for (const statement of statements) {
       await testPool.query(statement);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (!message.includes("already exists") && !message.includes("duplicate key")) {
-        throw err;
-      }
     }
   }
 }

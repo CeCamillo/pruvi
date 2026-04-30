@@ -36,6 +36,11 @@ CREATE TABLE "user" (
 	"lives_reset_at" timestamp,
 	"total_xp" integer DEFAULT 0 NOT NULL,
 	"current_level" integer DEFAULT 1 NOT NULL,
+	"selected_exam" text,
+	"prep_timeline" text,
+	"difficulties" jsonb,
+	"daily_study_time" text,
+	"onboarding_completed" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "user_email_unique" UNIQUE("email")
@@ -51,32 +56,34 @@ CREATE TABLE "verification" (
 );
 --> statement-breakpoint
 CREATE TABLE "daily_session" (
-	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "daily_session_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
-	"status" text DEFAULT 'active' NOT NULL,
-	"question_count" integer DEFAULT 0 NOT NULL,
-	"correct_count" integer DEFAULT 0 NOT NULL,
+	"date" date NOT NULL,
+	"questions_answered" integer DEFAULT 0 NOT NULL,
+	"questions_correct" integer DEFAULT 0 NOT NULL,
 	"completed_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "subject" (
-	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "subject_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"id" serial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "subject_name_unique" UNIQUE("name"),
 	CONSTRAINT "subject_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
 CREATE TABLE "question" (
-	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "question_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
-	"subject_id" integer NOT NULL,
-	"content" text NOT NULL,
+	"id" serial PRIMARY KEY NOT NULL,
+	"body" text NOT NULL,
 	"options" jsonb NOT NULL,
 	"correct_option_index" integer NOT NULL,
-	"difficulty" text NOT NULL,
+	"difficulty" integer DEFAULT 1 NOT NULL,
 	"requires_calculation" boolean DEFAULT false NOT NULL,
-	"source" text
+	"source" text,
+	"subject_id" integer NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "review_log" (
@@ -100,7 +107,5 @@ ALTER TABLE "review_log" ADD CONSTRAINT "review_log_question_id_question_id_fk" 
 CREATE INDEX "account_userId_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "session_userId_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");--> statement-breakpoint
-CREATE INDEX "daily_session_user_created_idx" ON "daily_session" USING btree ("user_id","created_at");--> statement-breakpoint
-CREATE INDEX "question_subject_difficulty_idx" ON "question" USING btree ("subject_id","difficulty");--> statement-breakpoint
 CREATE INDEX "review_log_user_next_review_idx" ON "review_log" USING btree ("user_id","next_review_at");--> statement-breakpoint
 CREATE INDEX "review_log_user_question_idx" ON "review_log" USING btree ("user_id","question_id");
