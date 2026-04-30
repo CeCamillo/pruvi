@@ -2,9 +2,11 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { setupTestDb, teardownTestDb, getTestDb } from "../../test/db-helpers";
 import { MeRepository } from "./me.repository";
 import { MeService } from "./me.service";
+import { computeLastMondayBoundary } from "./me.service";
 import { StreaksRepository } from "../streaks/streaks.repository";
 import { StreaksService } from "../streaks/streaks.service";
-import { GamificationRepository } from "../gamification/gamification.repository";
+import { LivesRepository } from "../lives/lives.repository";
+import { LivesService } from "../lives/lives.service";
 import { user } from "@pruvi/db/schema/auth";
 
 describe("MeService.buildBundle", () => {
@@ -17,7 +19,7 @@ describe("MeService.buildBundle", () => {
     service = new MeService(
       new MeRepository(testDb),
       new StreaksService(new StreaksRepository(testDb)),
-      new GamificationRepository(testDb),
+      new LivesService(new LivesRepository(testDb)),
     );
   });
 
@@ -94,5 +96,37 @@ describe("MeService.buildBundle", () => {
   it("returns NotFoundError for a missing user", async () => {
     const result = await service.buildBundle("nonexistent");
     expect(result.isErr()).toBe(true);
+  });
+
+  it("auto-refills lives when livesResetAt is in the past", async () => {
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await insertUser({ id: "u1", lives: 2, livesResetAt: past });
+    const bundle = (await service.buildBundle("u1"))._unsafeUnwrap();
+    expect(bundle.lives).toBe(5);
+    expect(bundle.livesResetAt).toBeNull();
+  });
+});
+
+describe("computeLastMondayBoundary", () => {
+  it("returns previous Monday 00:00 BRT for a Thursday afternoon", () => {
+    // Thursday 2026-04-30 14:30 UTC = 11:30 BRT → boundary Monday 2026-04-27 00:00 BRT = 2026-04-27 03:00 UTC
+    const now = new Date("2026-04-30T14:30:00Z");
+    const result = computeLastMondayBoundary(now);
+    expect(result.toISOString()).toBe("2026-04-27T03:00:00.000Z");
+  });
+
+  it("returns previous Monday for a late-Sunday-evening BRT (the previous bug window)", () => {
+    // Sunday 2026-04-26 23:00 BRT = Monday 2026-04-27 02:00 UTC
+    // BUT in BRT wall-time it's still Sunday — boundary should be Monday 2026-04-20 00:00 BRT = 2026-04-20 03:00 UTC
+    const now = new Date("2026-04-27T02:00:00Z");
+    const result = computeLastMondayBoundary(now);
+    expect(result.toISOString()).toBe("2026-04-20T03:00:00.000Z");
+  });
+
+  it("returns the same Monday when called exactly on the boundary", () => {
+    // Monday 2026-04-27 00:00 BRT = 2026-04-27 03:00 UTC — same day, same boundary
+    const now = new Date("2026-04-27T03:00:00Z");
+    const result = computeLastMondayBoundary(now);
+    expect(result.toISOString()).toBe("2026-04-27T03:00:00.000Z");
   });
 });
