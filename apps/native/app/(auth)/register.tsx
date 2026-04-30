@@ -17,6 +17,7 @@ import Svg, { Path, Rect } from "react-native-svg";
 import { z } from "zod";
 
 import { authService } from "@/services/auth.service";
+import { getAuthErrorMessage } from "@/lib/auth-errors";
 
 const registerSchema = z.object({
   name: z
@@ -148,7 +149,7 @@ export default function RegisterScreen() {
       data.password,
     );
     if (result.error) {
-      setFormError(result.error.message || "Não foi possível criar a conta");
+      setFormError(getAuthErrorMessage(result.error));
     } else {
       reset();
     }

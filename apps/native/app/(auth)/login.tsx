@@ -16,6 +16,7 @@ import Svg, { Path, Rect } from "react-native-svg";
 import { z } from "zod";
 
 import { authService } from "@/services/auth.service";
+import { getAuthErrorMessage } from "@/lib/auth-errors";
 
 const loginSchema = z.object({
   email: z
@@ -119,7 +120,7 @@ export default function LoginScreen() {
     setFormError(null);
     const result = await authService.login(data.email.trim(), data.password);
     if (result.error) {
-      setFormError(result.error.message || "Não foi possível entrar");
+      setFormError(getAuthErrorMessage(result.error));
     } else {
       reset();
     }
