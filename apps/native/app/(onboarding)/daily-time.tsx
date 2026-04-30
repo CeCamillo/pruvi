@@ -11,6 +11,13 @@ import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
 import { PrimaryButton } from "@/components/onboarding/primary-button";
 import { TimeOption } from "@/components/onboarding/time-option";
 
+const MINUTES_MAP: Record<DailyStudyTime, number> = {
+  "30min": 30,
+  "1h": 60,
+  "2h": 120,
+  "3h+": 180,
+};
+
 const OPTIONS: { id: DailyStudyTime; label: string; tag: string }[] = [
   { id: "30min", label: "30 minutos / dia", tag: "Casual" },
   { id: "1h", label: "1 hora / dia", tag: "Regular" },
@@ -43,7 +50,7 @@ export default function DailyTimeScreen() {
         selectedExam,
         prepTimeline,
         difficulties,
-        dailyStudyTime: selected,
+        dailyGoalMinutes: MINUTES_MAP[selected],
       });
       reset();
       router.replace("/(app)/(tabs)");
