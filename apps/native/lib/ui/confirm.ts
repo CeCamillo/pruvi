@@ -5,9 +5,14 @@ export function confirmDestructiveAction(
   message?: string
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    Alert.alert(title, message, [
-      { text: "Cancelar", style: "cancel", onPress: () => resolve(false) },
-      { text: "Confirmar", style: "destructive", onPress: () => resolve(true) },
-    ]);
+    Alert.alert(
+      title,
+      message,
+      [
+        { text: "Cancelar", style: "cancel", onPress: () => resolve(false) },
+        { text: "Confirmar", style: "destructive", onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
   });
 }
