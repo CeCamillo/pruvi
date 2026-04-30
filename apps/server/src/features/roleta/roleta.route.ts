@@ -75,6 +75,7 @@ export const roletaRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request) => {
       // XP / progress caches go stale after every answer.
       await Promise.allSettled([
+        fastify.cache.del(`me:${request.userId}`),
         fastify.cache.del(`xp:${request.userId}`),
         fastify.cache.del(`progress:${request.userId}`),
       ]);

@@ -16,7 +16,7 @@ const emptyPrefs = {
   selectedExam: null,
   prepTimeline: null,
   difficulties: null,
-  dailyStudyTime: null,
+  dailyGoalMinutes: null,
   onboardingCompleted: false,
 };
 
@@ -85,7 +85,7 @@ describe("OnboardingService", () => {
         selectedExam: "enem" as const,
         prepTimeline: "3m" as const,
         difficulties: ["consistency"] as ["consistency"],
-        dailyStudyTime: "1h" as const,
+        dailyGoalMinutes: 60,
       };
 
       const result = await service.completeOnboarding("user-1", payload);

@@ -4,6 +4,7 @@ export * from "./sessions";
 export * from "./sm2";
 export * from "./xp";
 export * from "./lives";
+export * from "./me";
 export * from "./auth";
 export * from "./progress";
 export * from "./subject-reviews";

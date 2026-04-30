@@ -24,8 +24,11 @@ export const studyDifficultyOptions = [
 export const studyDifficultySchema = z.enum(studyDifficultyOptions);
 export type StudyDifficulty = z.infer<typeof studyDifficultySchema>;
 
+/** @deprecated Replaced by dailyGoalMinutes (integer). Kept for native app backward compat during migration. */
 export const dailyStudyTimeOptions = ["30min", "1h", "2h", "3h+"] as const;
+/** @deprecated Replaced by dailyGoalMinutes (integer). Kept for native app backward compat during migration. */
 export const dailyStudyTimeSchema = z.enum(dailyStudyTimeOptions);
+/** @deprecated Replaced by dailyGoalMinutes (integer). Kept for native app backward compat during migration. */
 export type DailyStudyTime = z.infer<typeof dailyStudyTimeSchema>;
 
 /** PUT /users/me/preferences — partial update. */
@@ -33,7 +36,7 @@ export const userPreferencesSchema = z.object({
   selectedExam: examSchema.optional(),
   prepTimeline: prepTimelineSchema.optional(),
   difficulties: z.array(studyDifficultySchema).max(5).optional(),
-  dailyStudyTime: dailyStudyTimeSchema.optional(),
+  dailyGoalMinutes: z.number().int().min(30).max(180).nullable().optional(),
 });
 export type UserPreferences = z.infer<typeof userPreferencesSchema>;
 
@@ -42,7 +45,7 @@ export const userPreferencesResponseSchema = z.object({
   selectedExam: examSchema.nullable(),
   prepTimeline: prepTimelineSchema.nullable(),
   difficulties: z.array(studyDifficultySchema).nullable(),
-  dailyStudyTime: dailyStudyTimeSchema.nullable(),
+  dailyGoalMinutes: z.number().int().min(30).max(180).nullable(),
   onboardingCompleted: z.boolean(),
 });
 export type UserPreferencesResponse = z.infer<
@@ -54,7 +57,7 @@ export const onboardingCompleteBodySchema = z.object({
   selectedExam: examSchema,
   prepTimeline: prepTimelineSchema,
   difficulties: z.array(studyDifficultySchema).min(1).max(5),
-  dailyStudyTime: dailyStudyTimeSchema,
+  dailyGoalMinutes: z.number().int().min(30).max(180),
 });
 export type OnboardingCompleteBody = z.infer<
   typeof onboardingCompleteBodySchema

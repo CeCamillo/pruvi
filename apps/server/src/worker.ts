@@ -1,18 +1,21 @@
 import { startSessionPrefetchWorker } from "./workers/session-prefetch.worker";
+import { startWeeklyXpResetWorker } from "./workers/weekly-xp-reset.worker";
 
-const worker = startSessionPrefetchWorker();
+const sessionPrefetch = startSessionPrefetchWorker();
+const weeklyReset = startWeeklyXpResetWorker();
 
-if (!worker) {
+if (!sessionPrefetch || !weeklyReset) {
   console.error("Worker failed to start — REDIS_URL required");
   process.exit(1);
 }
 
-console.log("Session prefetch worker started");
+console.log("Workers started: session-prefetch, weekly-xp-reset");
 
 // Graceful shutdown
 const shutdown = async () => {
-  console.log("Shutting down worker...");
-  await worker.cleanup();
+  console.log("Shutting down workers...");
+  await sessionPrefetch.cleanup();
+  await weeklyReset.cleanup();
   process.exit(0);
 };
 
