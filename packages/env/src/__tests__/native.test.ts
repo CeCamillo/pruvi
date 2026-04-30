@@ -1,13 +1,22 @@
 import { describe, expect, it } from "bun:test";
 
 function loadEnv(envOverride: Record<string, string | undefined>) {
+  const original: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(envOverride)) {
+    original[k] = process.env[k];
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
   const path = require.resolve("../native");
   delete require.cache[path];
-  return require("../native");
+  try {
+    return require("../native");
+  } finally {
+    for (const [k, v] of Object.entries(original)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
 }
 
 describe("native env", () => {
