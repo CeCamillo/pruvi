@@ -1,5 +1,6 @@
 import "@/global.css";
 import { Redirect, Slot, useSegments } from "expo-router";
+import { getAuthRedirectTarget } from "@/lib/auth-redirect";
 import { HeroUINativeProvider, Spinner } from "heroui-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -28,17 +29,25 @@ function LoadingScreen() {
 }
 
 function AuthGate() {
-  const { data: session, isPending, error } = authClient.useSession();
+  const session = authClient.useSession();
   const segments = useSegments();
-  // Only fetch preferences once we have a session — the endpoint is auth-gated
-  // and would 401 for unauthenticated users.
-  const prefs = usePreferences({ enabled: !!session });
+  const prefs = usePreferences({ enabled: !!session.data });
 
-  if (isPending) {
-    return <LoadingScreen />;
-  }
+  const result = getAuthRedirectTarget(
+    {
+      isPending: session.isPending,
+      error: session.error,
+      data: session.data ?? null,
+    },
+    {
+      isPending: prefs.isPending,
+      data: prefs.data ?? undefined,
+    },
+    segments
+  );
 
-  if (error) {
+  if (result.kind === "loading") return <LoadingScreen />;
+  if (result.kind === "error") {
     return (
       <View className="flex-1 bg-background items-center justify-center px-8">
         <Text className="text-foreground text-base text-center">
@@ -47,35 +56,7 @@ function AuthGate() {
       </View>
     );
   }
-
-  const inAuthGroup = segments[0] === "(auth)";
-  const inOnboardingGroup = segments[0] === "(onboarding)";
-
-  if (!session && !inAuthGroup) {
-    return <Redirect href="/(auth)/login" />;
-  }
-
-  if (session && inAuthGroup) {
-    return <Redirect href="/(app)/(tabs)" />;
-  }
-
-  // Authenticated from here on. Wait for the preferences query to settle
-  // before routing the user into or out of the onboarding stack — otherwise
-  // we'd flash the wrong screen on cold start.
-  if (session) {
-    if (prefs.isPending) {
-      return <LoadingScreen />;
-    }
-    const onboardingCompleted = prefs.data?.onboardingCompleted === true;
-
-    if (!onboardingCompleted && !inOnboardingGroup) {
-      return <Redirect href="/(onboarding)/start" />;
-    }
-    if (onboardingCompleted && inOnboardingGroup) {
-      return <Redirect href="/(app)/(tabs)" />;
-    }
-  }
-
+  if (result.kind === "redirect") return <Redirect href={result.href} />;
   return <Slot />;
 }
 
