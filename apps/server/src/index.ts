@@ -10,6 +10,7 @@ import {
 } from "fastify-type-provider-zod";
 import { gamificationRoutes } from "./features/gamification";
 import { livesRoutes } from "./features/lives";
+import { meRoutes } from "./features/me";
 import { onboardingRoutes } from "./features/onboarding";
 import { progressRoutes } from "./features/progress";
 import { reviewsRoutes } from "./features/reviews";
@@ -68,6 +69,7 @@ export async function buildApp() {
   await app.register(sessionsRoutes);
   await app.register(reviewsRoutes);
   await app.register(livesRoutes);
+  await app.register(meRoutes);
   await app.register(streaksRoutes);
   await app.register(gamificationRoutes);
   await app.register(progressRoutes);
