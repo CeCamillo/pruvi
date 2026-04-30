@@ -1,5 +1,4 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -13,7 +12,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle as SvgCircle, Path, Rect } from "react-native-svg";
 
 import { authClient } from "@/lib/auth-client";
-import { authService } from "@/services/auth.service";
+import { confirmDestructiveAction } from "@/lib/ui/confirm";
+import { getAuthErrorMessage } from "@/lib/auth-errors";
 import { useCalendar } from "@/hooks/useCalendar";
 import { usePreferences } from "@/hooks/useOnboarding";
 import { useStreaks } from "@/hooks/useStreaks";
@@ -424,7 +424,6 @@ function PremiumCard() {
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { data: session } = authClient.useSession();
   const xp = useXp();
@@ -453,22 +452,18 @@ export default function ProfileScreen() {
     ? (EXAM_LABELS[preferences.data.selectedExam] ?? null)
     : null;
 
-  const handleLogout = async () => {
-    try {
-      await authService.logout();
-    } catch (err) {
-      console.warn("[profile] logout request failed", err);
-    } finally {
-      queryClient.clear();
-      router.replace("/(auth)/login");
+  const onSair = async () => {
+    const ok = await confirmDestructiveAction(
+      "Sair da conta?",
+      "Você precisará entrar novamente."
+    );
+    if (!ok) return;
+    const { error } = await authClient.signOut();
+    if (error) {
+      Alert.alert("Erro", getAuthErrorMessage(error));
+      return;
     }
-  };
-
-  const confirmLogout = () => {
-    Alert.alert("Sair da conta?", "Você precisará entrar novamente.", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Sair", style: "destructive", onPress: handleLogout },
-    ]);
+    queryClient.clear();
   };
 
   return (
@@ -481,7 +476,7 @@ export default function ProfileScreen() {
             <Pressable style={styles.topBarBtn}>
               <ShareIcon />
             </Pressable>
-            <Pressable style={styles.topBarBtnGray} onPress={confirmLogout}>
+            <Pressable style={styles.topBarBtnGray} onPress={onSair}>
               <SettingsIcon />
             </Pressable>
           </View>
@@ -516,7 +511,7 @@ export default function ProfileScreen() {
               styles.logoutBtn,
               pressed && { opacity: 0.8 },
             ]}
-            onPress={confirmLogout}
+            onPress={onSair}
           >
             <LogoutIcon />
             <Text style={styles.logoutText}>Sair da conta</Text>
