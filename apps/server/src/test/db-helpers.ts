@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { sql } from "drizzle-orm";
 import * as schema from "@pruvi/db/schema/index";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const TEST_DATABASE_URL =
@@ -27,11 +27,17 @@ export function getTestDb() {
 /** Push schema to test database by running the migration SQL. */
 export async function setupTestDb() {
   const testPool = getTestPool();
-  const migrationPath = resolve(
+  const migrationsDir = resolve(
     import.meta.dirname ?? ".",
-    "../../../../packages/db/src/migrations/0000_tranquil_blockbuster.sql"
+    "../../../../packages/db/src/migrations"
   );
-  const migrationSql = readFileSync(migrationPath, "utf-8");
+  const migrationFile = readdirSync(migrationsDir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()[0];
+  if (!migrationFile) {
+    throw new Error(`No migration .sql file found in ${migrationsDir}`);
+  }
+  const migrationSql = readFileSync(resolve(migrationsDir, migrationFile), "utf-8");
 
   const statements = migrationSql
     .split("--> statement-breakpoint")
