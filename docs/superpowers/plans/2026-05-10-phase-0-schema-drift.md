@@ -279,6 +279,138 @@ git commit -m "fix(db): daily_session — add status enum, drop date column"
 
 ---
 
+## Task 3.5: Fix `@pruvi/shared` package coherence (discovered scope)
+
+**Files:**
+- Modify: `packages/shared/src/sm2.ts`
+- Modify: `packages/shared/src/questions.ts`
+- Modify: `packages/shared/src/sessions.ts`
+
+**Why:** Discovered during Task 0 baseline verification: the shared package has been semi-broken on `main` for some time. `tsdown` bundles without type-checking, so runtime kept working as long as broken symbols were never hit. Specifically:
+- `shared/sm2.ts` exports `calculateSm2` (lowercase, 1-arg) but `reviews.service.ts` imports `calculateSM2` (uppercase, 2-arg). Also missing `INITIAL_SM2_STATE` and `QualityScore` exports.
+- `shared/xp.ts` imports `Difficulty` from `./questions` — but `questions.ts` doesn't export that type.
+- `shared/sessions.ts` references undefined `SessionSchema` and `QuestionSchema` (4 places); has dead `CompleteSessionBodySchema` with old naming; `dailySessionSchema` has `date` field that shouldn't exist post-schema-cleanup.
+- `shared/questions.ts` defines duplicate `answerRequestSchema`/`answerResponseSchema` superseded by Task 8's `answers.ts`. Uses `body` and `difficulty: z.number()` — drift from canonical.
+- `sessions.route.ts` imports `StartSessionBodySchema` which is referenced but undefined.
+
+This task makes the shared package coherent and unblocks `check-types` for all subsequent tasks.
+
+- [ ] **Step 1: Fix `packages/shared/src/sm2.ts` — add missing exports + name alias**
+
+Append to the end of `packages/shared/src/sm2.ts` (after the existing `calculateSm2` function):
+
+```typescript
+/** SM-2 quality score: 0-5 scale used by the algorithm. */
+export type QualityScore = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** Initial SM-2 state for a question that has never been reviewed. */
+export const INITIAL_SM2_STATE = {
+  easinessFactor: 2.5,
+  interval: 0,
+  repetitions: 0,
+  nextReviewAt: new Date(0),
+} as const;
+
+/** Legacy 2-arg SM-2 API used by reviews.service.ts.
+ *  Takes prior state + quality, returns next state. */
+export function calculateSM2(
+  prev: {
+    easinessFactor: number;
+    interval: number;
+    repetitions: number;
+    nextReviewAt: Date;
+  },
+  quality: QualityScore
+): {
+  easinessFactor: number;
+  interval: number;
+  repetitions: number;
+  nextReviewAt: Date;
+} {
+  const result = calculateSm2({
+    quality,
+    repetitions: prev.repetitions,
+    easeFactor: prev.easinessFactor,
+    interval: prev.interval,
+  });
+  if (result.isErr()) throw result.error;
+  const out = result.value;
+  return {
+    easinessFactor: out.easeFactor,
+    interval: out.interval,
+    repetitions: out.repetitions,
+    nextReviewAt: new Date(out.nextReviewAt),
+  };
+}
+```
+
+- [ ] **Step 2: Fix `packages/shared/src/questions.ts` — content, enum, Difficulty export, drop duplicates**
+
+Replace entire file:
+
+```typescript
+import { z } from "zod";
+
+export const difficultyEnum = z.enum(["easy", "medium", "hard"]);
+export type Difficulty = z.infer<typeof difficultyEnum>;
+
+export const questionSchema = z.object({
+  id: z.number(),
+  content: z.string(),
+  options: z.array(z.string()),
+  correctOptionIndex: z.number(),
+  difficulty: difficultyEnum,
+  source: z.string().nullable(),
+  subjectId: z.number(),
+});
+
+export type Question = z.infer<typeof questionSchema>;
+```
+
+(Deletes duplicate `answerRequestSchema`/`answerResponseSchema` — superseded by Task 8's `answers.ts`.)
+
+- [ ] **Step 3: Fix `packages/shared/src/sessions.ts` — define StartSessionBodySchema, drop broken refs**
+
+Replace entire file:
+
+```typescript
+import { z } from "zod";
+
+export const sessionStatsSchema = z.object({
+  currentStreak: z.number(),
+  longestStreak: z.number(),
+  totalSessions: z.number(),
+});
+
+export type SessionStats = z.infer<typeof sessionStatsSchema>;
+
+/** POST /sessions/start — request body */
+export const StartSessionBodySchema = z.object({
+  mode: z.enum(["all", "theoretical"]).default("all"),
+});
+
+export type StartSessionBody = z.infer<typeof StartSessionBodySchema>;
+```
+
+(Deletes broken `Session = z.infer<typeof SessionSchema>`, `StartSessionResponseSchema`, `CompleteSessionBodySchema`, `CompleteSessionResponseSchema`, `TodaySessionResponseSchema`, and old `dailySessionSchema` — none imported anywhere outside the file itself, verified by grep.)
+
+- [ ] **Step 4: Run typecheck**
+
+```bash
+pnpm run check-types 2>&1 | tail -20
+```
+
+Expected: passes (all consumers now resolve).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/shared/src/sm2.ts packages/shared/src/questions.ts packages/shared/src/sessions.ts
+git commit -m "fix(shared): reconcile package — add missing exports, drop broken refs, content/enum"
+```
+
+---
+
 ## Task 4: Update sessions repository, service, route, and tests
 
 **Files:**
