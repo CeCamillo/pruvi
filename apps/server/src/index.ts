@@ -11,6 +11,7 @@ import {
 import { gamificationRoutes } from "./features/gamification";
 import { livesRoutes } from "./features/lives";
 import { onboardingRoutes } from "./features/onboarding";
+import { progressRoutes } from "./features/progress";
 import { reviewsRoutes } from "./features/reviews";
 import { sessionsRoutes } from "./features/sessions";
 import { streaksRoutes } from "./features/streaks";
@@ -71,6 +72,7 @@ export async function buildApp() {
   await app.register(gamificationRoutes);
   await app.register(onboardingRoutes);
   await app.register(usersRoutes);
+  await app.register(progressRoutes);
 
   // Health check — verifies DB connectivity for ALB
   app.get("/health", async (_request, reply) => {
