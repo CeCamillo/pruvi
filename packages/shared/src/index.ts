@@ -4,3 +4,5 @@ export * from "./sessions";
 export * from "./sm2";
 export * from "./xp";
 export * from "./lives";
+export * from "./answers";
+export * from "./streaks";
