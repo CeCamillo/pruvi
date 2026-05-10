@@ -63,10 +63,11 @@ export async function createTestDb() {
 
     CREATE TABLE IF NOT EXISTS "question" (
       id SERIAL PRIMARY KEY,
-      body TEXT NOT NULL,
+      content TEXT NOT NULL,
       options JSONB NOT NULL,
       correct_option_index INTEGER NOT NULL,
-      difficulty INTEGER NOT NULL DEFAULT 1,
+      difficulty TEXT NOT NULL,
+      requires_calculation BOOLEAN NOT NULL DEFAULT FALSE,
       source TEXT,
       subject_id INTEGER NOT NULL REFERENCES "subject"(id),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
