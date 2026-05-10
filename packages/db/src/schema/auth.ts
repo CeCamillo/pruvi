@@ -8,7 +8,7 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
   lives: integer("lives").notNull().default(5),
-  livesResetAt: timestamp("lives_reset_at", { withTimezone: true }),
+  livesResetAt: timestamp("lives_reset_at"),
   totalXp: integer("total_xp").notNull().default(0),
   currentLevel: integer("current_level").notNull().default(1),
   createdAt: timestamp("created_at").defaultNow().notNull(),
