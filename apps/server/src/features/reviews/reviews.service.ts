@@ -25,6 +25,7 @@ export class ReviewsService {
         correctOptionIndex: number;
         livesRemaining: number;
         xpAwarded: number;
+        explanation: string | null;
       },
       AppError
     >
@@ -110,6 +111,7 @@ export class ReviewsService {
       correctOptionIndex: q.correctOptionIndex,
       livesRemaining,
       xpAwarded,
+      explanation: q.explanation ?? null,
     });
   }
 }
