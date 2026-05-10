@@ -7,3 +7,4 @@ export * from "./lives";
 export * from "./answers";
 export * from "./streaks";
 export * from "./onboarding";
+export * from "./users";
