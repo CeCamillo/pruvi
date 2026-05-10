@@ -76,7 +76,10 @@
       "method": "POST",
       "url": "{{ _.base_url }}/api/auth/sign-up/email",
       "headers": [
-        { "name": "Content-Type", "value": "application/json" }
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
       ],
       "body": {
         "mimeType": "application/json",
@@ -92,7 +95,10 @@
       "method": "POST",
       "url": "{{ _.base_url }}/api/auth/sign-in/email",
       "headers": [
-        { "name": "Content-Type", "value": "application/json" }
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
       ],
       "body": {
         "mimeType": "application/json",
@@ -108,7 +114,10 @@
       "method": "GET",
       "url": "{{ _.base_url }}/api/auth/get-session",
       "headers": [
-        { "name": "Cookie", "value": "{{ _.session_token }}" }
+        {
+          "name": "Cookie",
+          "value": "{{ _.session_token }}"
+        }
       ],
       "body": {}
     },
@@ -121,8 +130,14 @@
       "method": "POST",
       "url": "{{ _.base_url }}/sessions/start",
       "headers": [
-        { "name": "Content-Type", "value": "application/json" },
-        { "name": "Cookie", "value": "{{ _.session_token }}" }
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "name": "Cookie",
+          "value": "{{ _.session_token }}"
+        }
       ],
       "body": {
         "mimeType": "application/json",
@@ -138,7 +153,10 @@
       "method": "GET",
       "url": "{{ _.base_url }}/sessions/today",
       "headers": [
-        { "name": "Cookie", "value": "{{ _.session_token }}" }
+        {
+          "name": "Cookie",
+          "value": "{{ _.session_token }}"
+        }
       ],
       "body": {}
     },
@@ -151,12 +169,18 @@
       "method": "POST",
       "url": "{{ _.base_url }}/sessions/1/complete",
       "headers": [
-        { "name": "Content-Type", "value": "application/json" },
-        { "name": "Cookie", "value": "{{ _.session_token }}" }
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "name": "Cookie",
+          "value": "{{ _.session_token }}"
+        }
       ],
       "body": {
         "mimeType": "application/json",
-        "text": "{\n  \"questionCount\": 10,\n  \"correctCount\": 7\n}"
+        "text": "{\n  \"questionsAnswered\": 10,\n  \"questionsCorrect\": 7\n}"
       }
     },
     {
@@ -168,8 +192,14 @@
       "method": "POST",
       "url": "{{ _.base_url }}/questions/1/answer",
       "headers": [
-        { "name": "Content-Type", "value": "application/json" },
-        { "name": "Cookie", "value": "{{ _.session_token }}" }
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "name": "Cookie",
+          "value": "{{ _.session_token }}"
+        }
       ],
       "body": {
         "mimeType": "application/json",
@@ -185,7 +215,10 @@
       "method": "GET",
       "url": "{{ _.base_url }}/users/me/lives",
       "headers": [
-        { "name": "Cookie", "value": "{{ _.session_token }}" }
+        {
+          "name": "Cookie",
+          "value": "{{ _.session_token }}"
+        }
       ],
       "body": {}
     },
@@ -198,7 +231,10 @@
       "method": "GET",
       "url": "{{ _.base_url }}/streaks",
       "headers": [
-        { "name": "Cookie", "value": "{{ _.session_token }}" }
+        {
+          "name": "Cookie",
+          "value": "{{ _.session_token }}"
+        }
       ],
       "body": {}
     }

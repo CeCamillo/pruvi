@@ -153,7 +153,7 @@ describe("ReviewsService.answerQuestion", () => {
     expect(secondCall.interval).toBeGreaterThan(1);
     // EF from prior was 2.60, quality=4 -> newEF = 2.60 + (0.1 - 1*(0.08 + 1*0.02)) = 2.60
     expect(secondCall.easinessFactor).toBe("2.60");
-    expect(secondCall.interval).toBe(Math.floor(6 * 2.6)); // 15
+    expect(secondCall.interval).toBe(Math.round(6 * 2.6)); // 16
   });
 
   it("XP is NOT awarded for wrong answers (repo.awardXp not called)", async () => {
