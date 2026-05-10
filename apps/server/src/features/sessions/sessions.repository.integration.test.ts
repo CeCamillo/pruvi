@@ -84,16 +84,16 @@ describe("SessionsRepository (integration)", () => {
       expect(created).toBeDefined();
       expect(created.userId).toBe("test-user-1");
       expect(created.status).toBe("active");
-      expect(created.questionCount).toBe(0);
-      expect(created.correctCount).toBe(0);
+      expect(created.questionsAnswered).toBe(0);
+      expect(created.questionsCorrect).toBe(0);
       expect(created.completedAt).toBeNull();
 
       const completed = await repo.completeSession(created.id, 10, 8);
 
       expect(completed).toBeDefined();
       expect(completed.status).toBe("completed");
-      expect(completed.questionCount).toBe(10);
-      expect(completed.correctCount).toBe(8);
+      expect(completed.questionsAnswered).toBe(10);
+      expect(completed.questionsCorrect).toBe(8);
       expect(completed.completedAt).toBeInstanceOf(Date);
     });
   });

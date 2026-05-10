@@ -84,19 +84,19 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
           id: z.coerce.number().int(),
         }),
         body: z.object({
-          questionCount: z.number().int().min(0),
-          correctCount: z.number().int().min(0),
+          questionsAnswered: z.number().int().min(0),
+          questionsCorrect: z.number().int().min(0),
         }),
       },
     },
     async (request) => {
       const { id } = request.params;
-      const { questionCount, correctCount } = request.body;
+      const { questionsAnswered, questionsCorrect } = request.body;
       const result = await service.completeSession(
         request.userId,
         id,
-        questionCount,
-        correctCount
+        questionsAnswered,
+        questionsCorrect
       );
       const session = unwrapResult(result).data;
 
