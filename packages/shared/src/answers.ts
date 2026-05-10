@@ -13,6 +13,7 @@ export const AnswerQuestionResponseSchema = z.object({
   correctOptionIndex: z.number().int().min(0).max(3),
   livesRemaining: z.number().int().min(0),
   xpAwarded: z.number().int().min(0),
+  explanation: z.string().nullable(),
 });
 
 export type AnswerQuestionResponse = z.infer<typeof AnswerQuestionResponseSchema>;
