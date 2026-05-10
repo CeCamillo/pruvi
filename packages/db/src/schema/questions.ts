@@ -12,6 +12,7 @@ export const question = pgTable(
     correctOptionIndex: integer("correct_option_index").notNull(),
     difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }).notNull(),
     requiresCalculation: boolean("requires_calculation").notNull().default(false),
+    explanation: text("explanation"),
     source: text("source"),
     subjectId: integer("subject_id")
       .notNull()
