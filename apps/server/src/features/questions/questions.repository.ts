@@ -20,7 +20,8 @@ export class QuestionsRepository {
     mode: "all" | "theoretical"
   ) {
     const now = new Date();
-    const selected: Array<typeof question.$inferSelect> = [];
+    type SelectedQuestion = Omit<typeof question.$inferSelect, "createdAt">;
+    const selected: Array<SelectedQuestion> = [];
 
     // Base filter for paper/pen mode
     const modeFilter: SQL | undefined =
