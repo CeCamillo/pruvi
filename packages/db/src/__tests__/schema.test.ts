@@ -33,16 +33,16 @@ describe("database schema", () => {
     const [q] = await db
       .insert(question)
       .values({
-        body: "Qual é a unidade de força no SI?",
+        content: "Qual é a unidade de força no SI?",
         options: ["Joule", "Newton", "Watt", "Pascal"],
         correctOptionIndex: 1,
-        difficulty: 2,
+        difficulty: "easy",
         source: "ENEM 2020",
         subjectId: sub.id,
       })
       .returning();
 
-    expect(q.body).toContain("unidade de força");
+    expect(q.content).toContain("unidade de força");
     expect(q.options).toEqual(["Joule", "Newton", "Watt", "Pascal"]);
     expect(q.subjectId).toBe(sub.id);
 
