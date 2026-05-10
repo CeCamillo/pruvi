@@ -1,5 +1,5 @@
-import { relations } from "drizzle-orm";
-import { integer, pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { boolean, date, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -11,6 +11,16 @@ export const user = pgTable("user", {
   livesResetAt: timestamp("lives_reset_at"),
   totalXp: integer("total_xp").notNull().default(0),
   currentLevel: integer("current_level").notNull().default(1),
+  selectedExam: text("selected_exam", {
+    enum: ["fuvest", "unicamp", "enem", "usp_sp", "outras"],
+  }),
+  examDate: date("exam_date"),
+  difficulties: text("difficulties")
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
+  dailyStudyTimeMinutes: integer("daily_study_time_minutes"),
+  onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
