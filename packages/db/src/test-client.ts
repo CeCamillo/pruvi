@@ -14,6 +14,10 @@ export async function createTestDb() {
       email TEXT NOT NULL UNIQUE,
       email_verified BOOLEAN NOT NULL DEFAULT FALSE,
       image TEXT,
+      lives INTEGER NOT NULL DEFAULT 5,
+      lives_reset_at TIMESTAMP,
+      total_xp INTEGER NOT NULL DEFAULT 0,
+      current_level INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
@@ -78,17 +82,17 @@ export async function createTestDb() {
       user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
       question_id INTEGER NOT NULL REFERENCES "question"(id),
       quality INTEGER NOT NULL,
-      ease_factor REAL NOT NULL DEFAULT 2.5,
-      interval INTEGER NOT NULL DEFAULT 0,
-      repetitions INTEGER NOT NULL DEFAULT 0,
+      easiness_factor NUMERIC(4,2) NOT NULL,
+      interval INTEGER NOT NULL,
+      repetitions INTEGER NOT NULL,
       next_review_at TIMESTAMP NOT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      reviewed_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS "daily_session" (
       id SERIAL PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
-      date DATE NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
       questions_answered INTEGER NOT NULL DEFAULT 0,
       questions_correct INTEGER NOT NULL DEFAULT 0,
       completed_at TIMESTAMP,
