@@ -51,11 +51,7 @@ export async function setupTestDb() {
         await testPool.query(statement);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        if (
-          !message.includes("already exists") &&
-          !message.includes("duplicate key") &&
-          !message.includes("does not exist")
-        ) {
+        if (!message.includes("already exists") && !message.includes("duplicate key")) {
           throw err;
         }
       }
