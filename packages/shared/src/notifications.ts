@@ -24,5 +24,8 @@ export const NotificationPreferencesSchema = z.object({
 });
 export type NotificationPreferences = z.infer<typeof NotificationPreferencesSchema>;
 
-export const UpdateNotificationPreferencesBodySchema = NotificationPreferencesSchema.partial();
+export const UpdateNotificationPreferencesBodySchema = NotificationPreferencesSchema.partial().refine(
+  (v) => Object.keys(v).length > 0,
+  { message: "At least one preference field must be provided" },
+);
 export type UpdateNotificationPreferencesBody = z.infer<typeof UpdateNotificationPreferencesBodySchema>;

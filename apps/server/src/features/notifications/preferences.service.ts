@@ -16,6 +16,9 @@ export class PreferencesService {
   }
 
   async update(userId: string, patch: PrefsPatch): Promise<Result<PrefsRow, AppError>> {
+    if (Object.keys(patch).length === 0) {
+      return err(new ValidationError("At least one preference field must be provided"));
+    }
     if (patch.notificationHour !== undefined) {
       if (
         !Number.isInteger(patch.notificationHour) ||

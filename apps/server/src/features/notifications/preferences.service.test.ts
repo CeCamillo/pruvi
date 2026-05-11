@@ -59,4 +59,12 @@ describe("PreferencesService.update", () => {
     const result = await service.update("u", { notificationHour: -1 });
     expect(result.isErr()).toBe(true);
   });
+
+  it("rejects an empty patch with ValidationError", async () => {
+    const repo = stubRepo();
+    const service = new PreferencesService(repo as any);
+    const result = await service.update("u", {});
+    expect(result.isErr()).toBe(true);
+    expect(repo.update).not.toHaveBeenCalled();
+  });
 });
