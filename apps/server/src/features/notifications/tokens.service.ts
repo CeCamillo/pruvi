@@ -1,4 +1,4 @@
-import { ok, type Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
 import { AppError } from "../../utils/errors";
 import type { TokensRepository } from "./tokens.repository";
 
@@ -12,7 +12,7 @@ export class TokensService {
   ): Promise<Result<{ id: number; token: string; platform: "ios" | "android" }, AppError>> {
     const row = await this.repo.upsert(userId, token, platform);
     if (!row) {
-      throw new AppError("Failed to upsert push token", 500, "UPSERT_FAILED");
+      return err(new AppError("Failed to upsert push token", 500, "UPSERT_FAILED"));
     }
     return ok({ id: row.id, token: row.token, platform: row.platform });
   }
