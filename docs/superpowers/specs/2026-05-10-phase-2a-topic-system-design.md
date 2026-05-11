@@ -188,10 +188,12 @@ Response:
 ```json
 {
   "items": [
-    { "subtopicId": 17, "subtopicName": "Membrana plasmática", "topicId": 5, "topicName": "Citologia", "subjectId": 1, "state": "entendendo", "efAvg": 2.31, "reviewCount": 9 }
+    { "subtopicId": 17, "subtopicName": "Membrana plasmática", "topicId": 5, "topicName": "Citologia", "subjectId": 1, "subjectName": "Biologia", "state": "entendendo", "efAvg": 2.31, "reviewCount": 9 }
   ]
 }
 ```
+
+(`subjectName` included so the frontend can render the mastery list without a separate subjects lookup.)
 
 ### Extension: `POST /sessions/start`
 
