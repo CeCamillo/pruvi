@@ -74,7 +74,7 @@ describe("calculateSm2", () => {
     }
     // Each q=5 answer adds +0.1 ease
     for (let i = 1; i < easeValues.length; i++) {
-      expect(easeValues[i]).toBeGreaterThan(easeValues.at(i - 1));
+      expect(easeValues[i]!).toBeGreaterThan(easeValues[i - 1]!);
     }
   });
 });

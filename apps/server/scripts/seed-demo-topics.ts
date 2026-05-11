@@ -25,6 +25,7 @@ async function main() {
       .insert(topic)
       .values({ subjectId: bio.id, name: "Citologia", slug: "citologia", displayOrder: 1 })
       .returning();
+    if (!citologia) throw new Error("Failed to insert Citologia topic");
 
     const subs = [
       { name: "Membrana plasmática", slug: "membrana-plasmatica", order: 0 },
@@ -59,7 +60,7 @@ async function main() {
           WHERE subject_id = ${bio.id} AND subtopic_id = ${geralSub.id}
           LIMIT 2
         )
-        UPDATE "question" SET subtopic_id = ${inserted[i].id}
+        UPDATE "question" SET subtopic_id = ${inserted[i]!.id}
         WHERE id IN (SELECT id FROM picked)
       `);
     }
