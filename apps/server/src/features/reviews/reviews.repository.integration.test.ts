@@ -9,6 +9,7 @@ import { ReviewsRepository } from "./reviews.repository";
 import { user } from "@pruvi/db/schema/auth";
 import { subject } from "@pruvi/db/schema/subjects";
 import { question } from "@pruvi/db/schema/questions";
+import { topic, subtopic } from "@pruvi/db/schema/topics";
 import { eq } from "drizzle-orm";
 
 describe("ReviewsRepository (integration)", () => {
@@ -43,10 +44,20 @@ describe("ReviewsRepository (integration)", () => {
       .values({ name: "Math", slug: "math" })
       .returning();
 
+    const [t] = await db
+      .insert(topic)
+      .values({ subjectId: subj.id, name: "Test Topic", slug: "test-topic", displayOrder: 0 })
+      .returning();
+    const [st] = await db
+      .insert(subtopic)
+      .values({ topicId: t.id, name: "Test Subtopic", slug: "test-subtopic", displayOrder: 0 })
+      .returning();
+
     const [q] = await db
       .insert(question)
       .values({
         subjectId: subj.id,
+        subtopicId: st.id,
         content: "What is 2+2?",
         options: ["3", "4", "5", "6"],
         correctOptionIndex: 1,

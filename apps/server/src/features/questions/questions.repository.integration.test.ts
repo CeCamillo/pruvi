@@ -9,6 +9,7 @@ import { QuestionsRepository } from "./questions.repository";
 import { user } from "@pruvi/db/schema/auth";
 import { subject } from "@pruvi/db/schema/subjects";
 import { question } from "@pruvi/db/schema/questions";
+import { topic, subtopic } from "@pruvi/db/schema/topics";
 import { reviewLog } from "@pruvi/db/schema/review-log";
 
 describe("QuestionsRepository (integration)", () => {
@@ -47,12 +48,31 @@ describe("QuestionsRepository (integration)", () => {
       ])
       .returning();
 
+    const [t1] = await db
+      .insert(topic)
+      .values({ subjectId: subj1.id, name: "Test Topic", slug: "test-topic", displayOrder: 0 })
+      .returning();
+    const [st1] = await db
+      .insert(subtopic)
+      .values({ topicId: t1.id, name: "Test Subtopic", slug: "test-subtopic", displayOrder: 0 })
+      .returning();
+
+    const [t2] = await db
+      .insert(topic)
+      .values({ subjectId: subj2.id, name: "Test Topic 2", slug: "test-topic-2", displayOrder: 0 })
+      .returning();
+    const [st2] = await db
+      .insert(subtopic)
+      .values({ topicId: t2.id, name: "Test Subtopic 2", slug: "test-subtopic-2", displayOrder: 0 })
+      .returning();
+
     const questions = await db
       .insert(question)
       .values([
         // 3 easy (2 theoretical, 1 requires calculation)
         {
           subjectId: subj1.id,
+          subtopicId: st1.id,
           content: "Easy Q1",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 0,
@@ -61,6 +81,7 @@ describe("QuestionsRepository (integration)", () => {
         },
         {
           subjectId: subj1.id,
+          subtopicId: st1.id,
           content: "Easy Q2",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 1,
@@ -69,6 +90,7 @@ describe("QuestionsRepository (integration)", () => {
         },
         {
           subjectId: subj2.id,
+          subtopicId: st2.id,
           content: "Easy Q3 (calc)",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 2,
@@ -78,6 +100,7 @@ describe("QuestionsRepository (integration)", () => {
         // 2 medium (1 theoretical, 1 requires calculation)
         {
           subjectId: subj1.id,
+          subtopicId: st1.id,
           content: "Medium Q4",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 0,
@@ -86,6 +109,7 @@ describe("QuestionsRepository (integration)", () => {
         },
         {
           subjectId: subj2.id,
+          subtopicId: st2.id,
           content: "Medium Q5 (calc)",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 3,
@@ -95,6 +119,7 @@ describe("QuestionsRepository (integration)", () => {
         // 1 hard (theoretical)
         {
           subjectId: subj2.id,
+          subtopicId: st2.id,
           content: "Hard Q6",
           options: ["A", "B", "C", "D"],
           correctOptionIndex: 1,

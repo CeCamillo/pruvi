@@ -8,6 +8,7 @@ import {
 import { user } from "@pruvi/db/schema/auth";
 import { subject } from "@pruvi/db/schema/subjects";
 import { question } from "@pruvi/db/schema/questions";
+import { topic, subtopic } from "@pruvi/db/schema/topics";
 import { reviewLog } from "@pruvi/db/schema/review-log";
 import { dailySession } from "@pruvi/db/schema/daily-sessions";
 import { ProgressRepository } from "./progress.repository";
@@ -52,6 +53,24 @@ describe("ProgressRepository integration", () => {
 
     if (!subjA || !subjB) throw new Error("Failed to seed subjects");
 
+    const [tA] = await db
+      .insert(topic)
+      .values({ subjectId: subjA.id, name: "Test Topic", slug: "test-topic-mat", displayOrder: 0 })
+      .returning();
+    const [stA] = await db
+      .insert(subtopic)
+      .values({ topicId: tA.id, name: "Test Subtopic", slug: "test-subtopic-mat", displayOrder: 0 })
+      .returning();
+
+    const [tB] = await db
+      .insert(topic)
+      .values({ subjectId: subjB.id, name: "Test Topic", slug: "test-topic-bio", displayOrder: 0 })
+      .returning();
+    const [stB] = await db
+      .insert(subtopic)
+      .values({ topicId: tB.id, name: "Test Subtopic", slug: "test-subtopic-bio", displayOrder: 0 })
+      .returning();
+
     const [q1] = await db
       .insert(question)
       .values({
@@ -60,6 +79,7 @@ describe("ProgressRepository integration", () => {
         correctOptionIndex: 0,
         difficulty: "easy",
         subjectId: subjA.id,
+        subtopicId: stA.id,
       })
       .returning();
     const [q2] = await db
@@ -70,6 +90,7 @@ describe("ProgressRepository integration", () => {
         correctOptionIndex: 1,
         difficulty: "medium",
         subjectId: subjB.id,
+        subtopicId: stB.id,
       })
       .returning();
 
