@@ -52,7 +52,13 @@ describe("LivesRepository (integration)", () => {
         .where(eq(user.id, userId));
       const now = new Date("2026-05-11T10:00:00Z");
       const r = await repo.tryDecrement(userId, now);
-      expect(r).toEqual({ ok: true, livesAfter: 3, lastRegenAt: firstAnchor });
+      expect(r.ok).toBe(true);
+      if (!r.ok) throw new Error("unreachable");
+      expect(r.livesAfter).toBe(3);
+      // COALESCE kept the previously-persisted anchor: returned value matches DB round-trip, not `now`.
+      const persisted = await repo.getUserLives(userId);
+      expect(r.lastRegenAt!.getTime()).toBe(persisted!.livesLastRegenAt!.getTime());
+      expect(r.lastRegenAt!.getTime()).not.toBe(now.getTime());
     });
 
     it("returns ok:false when lives = 0 (no decrement)", async () => {
