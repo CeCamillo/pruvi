@@ -8,3 +8,4 @@ export * from "./answers";
 export * from "./streaks";
 export * from "./onboarding";
 export * from "./users";
+export * from "./progress";
