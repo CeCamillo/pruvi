@@ -23,6 +23,8 @@ export async function createTestDb() {
       difficulties TEXT[] NOT NULL DEFAULT '{}',
       daily_study_time_minutes INTEGER,
       onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
+      username TEXT UNIQUE,
+      invite_code TEXT NOT NULL DEFAULT substr(md5(random()::text), 1, 8) UNIQUE,
       notification_hour INTEGER NOT NULL DEFAULT 19,
       streak_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE,
       achievement_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
@@ -115,6 +117,7 @@ export async function createTestDb() {
       easiness_factor NUMERIC(4,2) NOT NULL,
       interval INTEGER NOT NULL,
       repetitions INTEGER NOT NULL,
+      xp_earned INTEGER NOT NULL DEFAULT 0 CHECK (xp_earned >= 0),
       next_review_at TIMESTAMP NOT NULL,
       reviewed_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
@@ -138,6 +141,31 @@ export async function createTestDb() {
       last_used_at TIMESTAMP NOT NULL DEFAULT NOW(),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS "friendship" (
+      id SERIAL PRIMARY KEY,
+      requester_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      recipient_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK (status IN ('pending','accepted','declined')),
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      accepted_at TIMESTAMP,
+      CONSTRAINT friendship_no_self_chk CHECK (requester_id <> recipient_id)
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS friendship_pair_idx ON friendship
+      (LEAST(requester_id, recipient_id), GREATEST(requester_id, recipient_id));
+
+    CREATE INDEX IF NOT EXISTS friendship_requester_idx ON friendship (requester_id);
+    CREATE INDEX IF NOT EXISTS friendship_recipient_idx ON friendship (recipient_id);
+
+    CREATE TABLE IF NOT EXISTS "invitation_acceptance" (
+      id SERIAL PRIMARY KEY,
+      inviter_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      invitee_id TEXT NOT NULL UNIQUE REFERENCES "user"(id) ON DELETE CASCADE,
+      accepted_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS invitation_acceptance_inviter_idx ON invitation_acceptance (inviter_id);
   `);
 
   return { db, client };

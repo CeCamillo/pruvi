@@ -21,6 +21,8 @@ export const user = pgTable("user", {
     .default(sql`'{}'::text[]`),
   dailyStudyTimeMinutes: integer("daily_study_time_minutes"),
   onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
+  username: text("username"),
+  inviteCode: text("invite_code").notNull(),
   notificationHour: integer("notification_hour").notNull().default(19),
   streakRemindersEnabled: boolean("streak_reminders_enabled").notNull().default(true),
   achievementNotificationsEnabled: boolean("achievement_notifications_enabled").notNull().default(true),
