@@ -122,4 +122,22 @@ export class QuestionsRepository {
 
     return selected;
   }
+
+  /** Select questions filtered by subtopic. */
+  async selectQuestionsBySubtopic(subtopicId: number, limit: number) {
+    return this.db
+      .select({
+        id: question.id,
+        content: question.content,
+        options: question.options,
+        difficulty: question.difficulty,
+        requiresCalculation: question.requiresCalculation,
+        source: question.source,
+        subjectId: question.subjectId,
+        subtopicId: question.subtopicId,
+      })
+      .from(question)
+      .where(eq(question.subtopicId, subtopicId))
+      .limit(limit);
+  }
 }

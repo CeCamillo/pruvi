@@ -5,13 +5,17 @@ import { SessionsService } from "./sessions.service";
 import { SessionsRepository } from "./sessions.repository";
 import { QuestionsRepository } from "../questions/questions.repository";
 import { QuestionsService } from "../questions/questions.service";
+import { TopicsRepository } from "../topics/topics.repository";
+import { TopicsService } from "../topics/topics.service";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
 
 const sessionsRepo = new SessionsRepository(db);
 const questionsRepo = new QuestionsRepository(db);
 const questionsService = new QuestionsService(questionsRepo);
-const service = new SessionsService(sessionsRepo, questionsService);
+const topicsRepo = new TopicsRepository(db);
+const topicsService = new TopicsService(topicsRepo);
+const service = new SessionsService(sessionsRepo, questionsService, topicsService);
 
 const SESSION_CACHE_TTL = 30; // 30 seconds
 
@@ -26,13 +30,13 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       },
     },
     async (request) => {
-      const { mode } = request.body;
+      const { mode, topicId } = request.body;
 
       // Check for pre-generated questions in Redis (already stripped of correctOptionIndex)
       const prefetchKey = `prefetch:${request.userId}`;
       const cachedQuestions = await fastify.cache.get<unknown[]>(prefetchKey);
 
-      const result = await service.startSession(request.userId, mode, !!cachedQuestions);
+      const result = await service.startSession(request.userId, mode, !!cachedQuestions, topicId);
       const { session, questions } = unwrapResult(result).data;
 
       // If cache hit, use cached questions; otherwise strip correctOptionIndex from DB results
@@ -103,7 +107,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         questionsAnswered,
         questionsCorrect
       );
-      const session = unwrapResult(result).data;
+      const { session, transitions } = unwrapResult(result).data;
 
       // Invalidate caches that depend on session completion
       await Promise.all([
@@ -125,7 +129,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         );
       }
 
-      return successResponse({ session });
+      return successResponse({ session, transitions });
     }
   );
 };

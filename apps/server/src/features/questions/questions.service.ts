@@ -7,6 +7,13 @@ const DEFAULT_QUESTION_COUNT = 10;
 export class QuestionsService {
   constructor(private repo: QuestionsRepository) {}
 
+  /** Select questions for a focused (subtopic) session. */
+  async selectForSubtopic(_userId: string, subtopicId: number) {
+    const QUESTIONS_PER_SESSION = 10;
+    const questions = await this.repo.selectQuestionsBySubtopic(subtopicId, QUESTIONS_PER_SESSION);
+    return ok(questions);
+  }
+
   /** Select questions for a session using SM-2 priority */
   async selectForSession(
     userId: string,
