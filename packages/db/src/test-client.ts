@@ -134,7 +134,7 @@ export async function createTestDb() {
       id SERIAL PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
       token TEXT NOT NULL UNIQUE,
-      platform TEXT NOT NULL,
+      platform TEXT NOT NULL CHECK (platform IN ('ios','android')),
       last_used_at TIMESTAMP NOT NULL DEFAULT NOW(),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
