@@ -10,7 +10,7 @@ import {
 } from "fastify-type-provider-zod";
 import { gamificationRoutes } from "./features/gamification";
 import { tokensRoutes, preferencesRoutes } from "./features/notifications";
-import { invitationsRoutes } from "./features/social";
+import { invitationsRoutes, friendshipsRoutes } from "./features/social";
 import { livesRoutes } from "./features/lives";
 import { onboardingRoutes } from "./features/onboarding";
 import { progressRoutes } from "./features/progress";
@@ -82,6 +82,7 @@ export async function buildApp() {
   await app.register(tokensRoutes);
   await app.register(preferencesRoutes);
   await app.register(invitationsRoutes);
+  await app.register(friendshipsRoutes);
 
   // Health check — verifies DB connectivity for ALB
   app.get("/health", async (_request, reply) => {
