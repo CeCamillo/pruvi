@@ -330,7 +330,8 @@
           "name": "invite_code",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "SUBSTRING(REPLACE(gen_random_uuid()::text, '-', '') FROM 1 FOR 8)"
         },
         "notification_hour": {
           "name": "notification_hour",

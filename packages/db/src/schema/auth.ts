@@ -22,7 +22,9 @@ export const user = pgTable("user", {
   dailyStudyTimeMinutes: integer("daily_study_time_minutes"),
   onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
   username: text("username"),
-  inviteCode: text("invite_code").notNull(),
+  inviteCode: text("invite_code")
+    .notNull()
+    .default(sql`SUBSTRING(REPLACE(gen_random_uuid()::text, '-', '') FROM 1 FOR 8)`),
   notificationHour: integer("notification_hour").notNull().default(19),
   streakRemindersEnabled: boolean("streak_reminders_enabled").notNull().default(true),
   achievementNotificationsEnabled: boolean("achievement_notifications_enabled").notNull().default(true),
