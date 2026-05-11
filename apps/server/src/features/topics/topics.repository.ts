@@ -208,4 +208,12 @@ export class TopicsRepository {
       .limit(1);
     return row ?? null;
   }
+
+  async findSubtopicsByIds(ids: number[]) {
+    if (ids.length === 0) return [];
+    return this.db
+      .select({ id: subtopic.id, topicId: subtopic.topicId, name: subtopic.name })
+      .from(subtopic)
+      .where(inArray(subtopic.id, ids));
+  }
 }

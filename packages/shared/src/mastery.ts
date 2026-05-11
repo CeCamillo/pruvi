@@ -1,8 +1,13 @@
-export type MasteryState =
-  | "aprendendo"
-  | "entendendo"
-  | "afiado"
-  | "quase_mestre";
+import { z } from "zod";
+
+export const MasteryStateSchema = z.enum([
+  "aprendendo",
+  "entendendo",
+  "afiado",
+  "quase_mestre",
+]);
+
+export type MasteryState = z.infer<typeof MasteryStateSchema>;
 
 export const MASTERY_THRESHOLDS = {
   entendendo: { minEf: 2.0, minReviews: 5 },

@@ -4,7 +4,7 @@ import { AnswerQuestionBodySchema } from "@pruvi/shared";
 import { ReviewsService } from "./reviews.service";
 import { ReviewsRepository } from "./reviews.repository";
 import { db } from "@pruvi/db";
-import { unwrapResult } from "../../types";
+import { unwrapResult, successResponse } from "../../types";
 
 const repo = new ReviewsRepository(db);
 const service = new ReviewsService(repo);
@@ -43,7 +43,7 @@ export const reviewsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         fastify.cache.del(`topic:${request.userId}:${cacheTargets.topicId}`),
       ]);
 
-      return { success: true as const, data: answer };
+      return successResponse(answer);
     }
   );
 };

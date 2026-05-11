@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
-import { setupTestDb, getTestDb, getTestPool } from "../../test/db-helpers";
+import { setupTestDb, getTestDb, cleanupTestDb, teardownTestDb } from "../../test/db-helpers";
 import { subject } from "@pruvi/db/schema/subjects";
 import { topic, subtopic } from "@pruvi/db/schema/topics";
 import { question } from "@pruvi/db/schema/questions";
@@ -35,25 +34,16 @@ async function seed() {
   return { sub, t, stA, stB, q };
 }
 
-async function clearAll() {
-  await db.delete(reviewLog);
-  await db.delete(question);
-  await db.delete(subtopic);
-  await db.delete(topic);
-  await db.delete(subject);
-  await db.delete(user).where(eq(user.id, USER_ID));
-}
-
 beforeAll(async () => {
   await setupTestDb();
 });
 
 afterAll(async () => {
-  await getTestPool().end();
+  await teardownTestDb();
 });
 
 beforeEach(async () => {
-  await clearAll();
+  await cleanupTestDb();
 });
 
 describe("TopicsRepository.getTrilha", () => {

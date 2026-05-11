@@ -30,6 +30,14 @@ export class SessionsService {
       AppError
     >
   > {
+    // Validate subtopic exists before doing any session work
+    if (topicId) {
+      const subtopic = await this.topicsService.findSubtopicById(topicId);
+      if (!subtopic) {
+        return err(new NotFoundError("Subtopic not found"));
+      }
+    }
+
     // Check if there's already an active session today
     const existing = await this.repo.findTodaySession(userId);
     if (existing && existing.status === "active") {

@@ -20,48 +20,50 @@ async function main() {
     return;
   }
 
-  const [citologia] = await db
-    .insert(topic)
-    .values({ subjectId: bio.id, name: "Citologia", slug: "citologia", displayOrder: 1 })
-    .returning();
+  await db.transaction(async (tx) => {
+    const [citologia] = await tx
+      .insert(topic)
+      .values({ subjectId: bio.id, name: "Citologia", slug: "citologia", displayOrder: 1 })
+      .returning();
 
-  const subs = [
-    { name: "Membrana plasmática", slug: "membrana-plasmatica", order: 0 },
-    { name: "Citoplasma", slug: "citoplasma", order: 1 },
-    { name: "Núcleo", slug: "nucleo", order: 2 },
-  ];
-  const inserted = await db
-    .insert(subtopic)
-    .values(subs.map((s) => ({ topicId: citologia.id, name: s.name, slug: s.slug, displayOrder: s.order })))
-    .returning();
+    const subs = [
+      { name: "Membrana plasmática", slug: "membrana-plasmatica", order: 0 },
+      { name: "Citoplasma", slug: "citoplasma", order: 1 },
+      { name: "Núcleo", slug: "nucleo", order: 2 },
+    ];
+    const inserted = await tx
+      .insert(subtopic)
+      .values(subs.map((s) => ({ topicId: citologia.id, name: s.name, slug: s.slug, displayOrder: s.order })))
+      .returning();
 
-  const [geralTopic] = await db
-    .select()
-    .from(topic)
-    .where(and(eq(topic.subjectId, bio.id), eq(topic.slug, "geral")))
-    .limit(1);
-  if (!geralTopic) {
-    console.log("No Geral topic for Biology — leaving subtopics empty.");
-    return;
-  }
-  const [geralSub] = await db
-    .select()
-    .from(subtopic)
-    .where(and(eq(subtopic.topicId, geralTopic.id), eq(subtopic.slug, "geral")))
-    .limit(1);
-  if (!geralSub) return;
+    const [geralTopic] = await tx
+      .select()
+      .from(topic)
+      .where(and(eq(topic.subjectId, bio.id), eq(topic.slug, "geral")))
+      .limit(1);
+    if (!geralTopic) {
+      console.log("No Geral topic for Biology — leaving subtopics empty.");
+      return;
+    }
+    const [geralSub] = await tx
+      .select()
+      .from(subtopic)
+      .where(and(eq(subtopic.topicId, geralTopic.id), eq(subtopic.slug, "geral")))
+      .limit(1);
+    if (!geralSub) return;
 
-  for (let i = 0; i < inserted.length; i++) {
-    await db.execute(sql`
-      WITH picked AS (
-        SELECT id FROM "question"
-        WHERE subject_id = ${bio.id} AND subtopic_id = ${geralSub.id}
-        LIMIT 2
-      )
-      UPDATE "question" SET subtopic_id = ${inserted[i].id}
-      WHERE id IN (SELECT id FROM picked)
-    `);
-  }
+    for (let i = 0; i < inserted.length; i++) {
+      await tx.execute(sql`
+        WITH picked AS (
+          SELECT id FROM "question"
+          WHERE subject_id = ${bio.id} AND subtopic_id = ${geralSub.id}
+          LIMIT 2
+        )
+        UPDATE "question" SET subtopic_id = ${inserted[i].id}
+        WHERE id IN (SELECT id FROM picked)
+      `);
+    }
+  });
 
   console.log("Demo topics seeded.");
 }

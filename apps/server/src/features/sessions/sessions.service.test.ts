@@ -201,6 +201,7 @@ describe("SessionsService.startSession with topicId", () => {
     } as any;
 
     const topicsService = {
+      findSubtopicById: vi.fn().mockResolvedValue({ id: 7, topicId: 1, name: "Membrana" }),
       snapshotMastery: vi.fn().mockResolvedValue({ "7": "aprendendo" }),
       getCurrentMasteryAndNames: vi.fn(),
       computeTransitions: vi.fn(),

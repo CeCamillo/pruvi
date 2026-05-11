@@ -8,6 +8,18 @@ import {
 import { NotFoundError, type AppError } from "../../utils/errors";
 import type { TopicsRepository } from "./topics.repository";
 
+type MasteryListItem = {
+  subtopicId: number;
+  subtopicName: string;
+  topicId: number;
+  topicName: string;
+  subjectId: number;
+  subjectName: string;
+  efAvg: number | null;
+  reviewCount: number;
+  state: MasteryState;
+};
+
 export class TopicsService {
   constructor(private repo: TopicsRepository) {}
 
@@ -62,7 +74,10 @@ export class TopicsService {
     });
   }
 
-  async getUserMastery(userId: string, subjectId: number | null) {
+  async getUserMastery(
+    userId: string,
+    subjectId: number | null,
+  ): Promise<Result<{ items: MasteryListItem[] }, AppError>> {
     const rows = await this.repo.getAllSubtopicMasteryForUser(userId, subjectId);
     return ok({
       items: rows.map((r) => ({
@@ -109,16 +124,24 @@ export class TopicsService {
     return out;
   }
 
+  async findSubtopicById(id: number) {
+    return this.repo.findSubtopicById(id);
+  }
+
   /** Used by sessions complete flow to look up names + current mastery rows. */
   async getCurrentMasteryAndNames(userId: string, subtopicIds: number[]) {
-    const masteryMap = await this.repo.getMasteryBySubtopics(userId, subtopicIds);
+    const [masteryMap, subtopics] = await Promise.all([
+      this.repo.getMasteryBySubtopics(userId, subtopicIds),
+      this.repo.findSubtopicsByIds(subtopicIds),
+    ]);
     const currentMap = new Map<number, MasteryState>();
     const namesMap = new Map<number, string>();
     for (const id of subtopicIds) {
       const m = masteryMap.get(id);
       currentMap.set(id, computeMastery(m?.efAvg ?? null, m?.reviewCount ?? 0));
-      const sub = await this.repo.findSubtopicById(id);
-      if (sub) namesMap.set(id, sub.name);
+    }
+    for (const sub of subtopics) {
+      namesMap.set(sub.id, sub.name);
     }
     return { currentMap, namesMap };
   }

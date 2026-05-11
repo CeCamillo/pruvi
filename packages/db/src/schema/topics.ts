@@ -2,6 +2,9 @@ import { relations } from "drizzle-orm";
 import { index, integer, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 import { subject } from "./subjects";
+// NOTE: question is imported for the back-relation; circular with questions.ts is safe for
+// Drizzle relation builders since Node.js module caching resolves it at runtime.
+import { question } from "./questions";
 
 export const topic = pgTable(
   "topic",
@@ -27,7 +30,7 @@ export const subtopic = pgTable(
     id: serial("id").primaryKey(),
     topicId: integer("topic_id")
       .notNull()
-      .references(() => topic.id),
+      .references(() => topic.id, { onDelete: "restrict" }),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     displayOrder: integer("display_order").notNull().default(0),
@@ -47,9 +50,10 @@ export const topicRelations = relations(topic, ({ one, many }) => ({
   subtopics: many(subtopic),
 }));
 
-export const subtopicRelations = relations(subtopic, ({ one }) => ({
+export const subtopicRelations = relations(subtopic, ({ one, many }) => ({
   topic: one(topic, {
     fields: [subtopic.topicId],
     references: [topic.id],
   }),
+  questions: many(question),
 }));

@@ -20,7 +20,7 @@ export const question = pgTable(
       .references(() => subject.id),
     subtopicId: integer("subtopic_id")
       .notNull()
-      .references(() => subtopic.id),
+      .references(() => subtopic.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

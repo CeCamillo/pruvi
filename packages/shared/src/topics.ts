@@ -1,17 +1,11 @@
 import { z } from "zod";
-
-export const MasteryStateSchema = z.enum([
-  "aprendendo",
-  "entendendo",
-  "afiado",
-  "quase_mestre",
-]);
+import { MasteryStateSchema } from "./mastery";
 
 export const SubtopicMasterySchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
   slug: z.string(),
-  displayOrder: z.number().int(),
+  displayOrder: z.number().int().min(0),
   state: MasteryStateSchema,
   efAvg: z.number().nullable(),
   reviewCount: z.number().int().min(0),
@@ -21,7 +15,7 @@ export const TopicSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
   slug: z.string(),
-  displayOrder: z.number().int(),
+  displayOrder: z.number().int().min(0),
   subtopics: z.array(SubtopicMasterySchema),
 });
 
@@ -40,7 +34,7 @@ export const TopicDetailResponseSchema = z.object({
     name: z.string(),
     slug: z.string(),
     subjectId: z.number().int().positive(),
-    displayOrder: z.number().int(),
+    displayOrder: z.number().int().min(0),
   }),
   subtopics: z.array(SubtopicMasterySchema),
 });
