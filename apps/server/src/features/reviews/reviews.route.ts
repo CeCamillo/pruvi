@@ -28,18 +28,22 @@ export const reviewsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const result = await service.answerQuestion(
         request.userId,
         questionId,
-        selectedOptionIndex
+        selectedOptionIndex,
       );
-      const response = unwrapResult(result);
+      const { answer, cacheTargets } = unwrapResult(result).data;
 
-      // Invalidate lives, XP, and progress caches
+      // Invalidate lives, XP, progress, mastery, trilha, and topic caches
       await Promise.all([
         fastify.cache.del(`lives:${request.userId}`),
         fastify.cache.del(`xp:${request.userId}`),
         fastify.cache.del(`progress:${request.userId}`),
+        fastify.cache.del(`mastery:${request.userId}:all`),
+        fastify.cache.del(`mastery:${request.userId}:${cacheTargets.subjectId}`),
+        fastify.cache.del(`trilha:${request.userId}:${cacheTargets.subjectId}`),
+        fastify.cache.del(`topic:${request.userId}:${cacheTargets.topicId}`),
       ]);
 
-      return response;
+      return { success: true as const, data: answer };
     }
   );
 };

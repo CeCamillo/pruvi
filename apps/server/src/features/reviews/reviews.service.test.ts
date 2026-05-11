@@ -22,6 +22,8 @@ const makeQuestion = (overrides?: Partial<{ difficulty: string; correctOptionInd
   correctOptionIndex: 2,
   difficulty: "medium",
   explanation: null,
+  subjectId: 1,
+  topicId: 1,
   ...overrides,
 });
 
@@ -47,10 +49,10 @@ describe("ReviewsService.answerQuestion", () => {
     expect(result.isOk()).toBe(true);
     const value = result._unsafeUnwrap();
 
-    expect(value.correct).toBe(true);
-    expect(value.correctOptionIndex).toBe(2);
-    expect(value.livesRemaining).toBe(5);
-    expect(value.xpAwarded).toBe(35); // hard = 35 XP
+    expect(value.answer.correct).toBe(true);
+    expect(value.answer.correctOptionIndex).toBe(2);
+    expect(value.answer.livesRemaining).toBe(5);
+    expect(value.answer.xpAwarded).toBe(35); // hard = 35 XP
 
     // SM-2 inserted with quality 4
     expect(mockRepo.insertReview).toHaveBeenCalledOnce();
@@ -71,9 +73,9 @@ describe("ReviewsService.answerQuestion", () => {
     expect(result.isOk()).toBe(true);
     const value = result._unsafeUnwrap();
 
-    expect(value.correct).toBe(false);
-    expect(value.xpAwarded).toBe(0);
-    expect(value.livesRemaining).toBe(4);
+    expect(value.answer.correct).toBe(false);
+    expect(value.answer.xpAwarded).toBe(0);
+    expect(value.answer.livesRemaining).toBe(4);
 
     // SM-2 inserted with quality 1
     expect(mockRepo.insertReview).toHaveBeenCalledWith(
@@ -106,7 +108,7 @@ describe("ReviewsService.answerQuestion", () => {
     const value = result._unsafeUnwrap();
 
     expect(mockRepo.resetLives).toHaveBeenCalledWith(USER_ID);
-    expect(value.livesRemaining).toBe(5);
+    expect(value.answer.livesRemaining).toBe(5);
   });
 
   it("question not found: returns NotFoundError", async () => {
@@ -163,7 +165,7 @@ describe("ReviewsService.answerQuestion", () => {
     expect(result.isOk()).toBe(true);
     const value = result._unsafeUnwrap();
 
-    expect(value.xpAwarded).toBe(0);
+    expect(value.answer.xpAwarded).toBe(0);
     expect(mockRepo.awardXp).not.toHaveBeenCalled();
   });
 
@@ -176,7 +178,7 @@ describe("ReviewsService.answerQuestion", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value.explanation).toBe("F=ma is Newton's second law");
+      expect(result.value.answer.explanation).toBe("F=ma is Newton's second law");
     }
   });
 
@@ -189,7 +191,7 @@ describe("ReviewsService.answerQuestion", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value.explanation).toBeNull();
+      expect(result.value.answer.explanation).toBeNull();
     }
   });
 });
