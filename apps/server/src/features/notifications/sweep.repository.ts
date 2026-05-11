@@ -21,7 +21,9 @@ export class SweepRepository {
         )
     `);
     // pg returns { rows: [...] }; PGlite returns the array directly. Handle both.
-    const rows: Array<{ user_id: string; token: string }> = (result as any).rows ?? (result as any);
+    const rows: Array<{ user_id: string; token: string }> = Array.isArray(result)
+      ? (result as Array<{ user_id: string; token: string }>)
+      : (result as { rows: Array<{ user_id: string; token: string }> }).rows;
     return rows.map((r) => ({ userId: r.user_id, token: r.token }));
   }
 }
