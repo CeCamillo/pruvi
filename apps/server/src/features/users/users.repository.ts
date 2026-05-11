@@ -38,6 +38,15 @@ export class UsersRepository {
     return row;
   }
 
+  async updateUsername(userId: string, username: string) {
+    const [row] = await this.db
+      .update(user)
+      .set({ username })
+      .where(eq(user.id, userId))
+      .returning({ username: user.username });
+    return row;
+  }
+
   async deleteUser(userId: string) {
     await this.db.delete(user).where(eq(user.id, userId));
   }

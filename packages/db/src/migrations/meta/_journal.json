@@ -43,6 +43,13 @@
       "when": 1778538917291,
       "tag": "0005_black_stephen_strange",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778540820492,
+      "tag": "0006_special_tusk",
+      "breakpoints": true
     }
   ]
 }

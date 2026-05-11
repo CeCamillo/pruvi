@@ -63,7 +63,13 @@ export class ReviewsService {
     // 5. Calculate new SM-2 state
     const newState = calculateSM2(previousState, quality);
 
-    // 6. Insert new review_log row
+    // 6. Calculate XP before inserting so it can be persisted with the review row
+    const xpAwarded = calculateXpForAnswer(
+      correct,
+      q.difficulty as Difficulty
+    );
+
+    // 6b. Insert new review_log row (including xpEarned)
     await this.repo.insertReview({
       userId,
       questionId,
@@ -72,13 +78,10 @@ export class ReviewsService {
       interval: newState.interval,
       repetitions: newState.repetitions,
       nextReviewAt: newState.nextReviewAt,
+      xpEarned: xpAwarded,
     });
 
-    // 6b. Award XP
-    const xpAwarded = calculateXpForAnswer(
-      correct,
-      q.difficulty as Difficulty
-    );
+    // 6c. Award XP
     if (xpAwarded > 0) {
       await this.repo.awardXp(userId, xpAwarded);
     }

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { UpdateProfileBodySchema } from "@pruvi/shared";
+import { UpdateBasicProfileBodySchema, UpdateProfileBodySchema } from "@pruvi/shared";
 import { db } from "@pruvi/db";
 import { UsersRepository } from "./users.repository";
 import { UsersService } from "./users.service";
@@ -13,10 +13,26 @@ export const usersRoutes: FastifyPluginAsyncZod = async (fastify) => {
     "/users/me/profile",
     {
       preHandler: [fastify.authenticate],
-      schema: { body: UpdateProfileBodySchema },
+      schema: { body: UpdateBasicProfileBodySchema },
     },
     async (request) => {
       const result = await service.updateProfile(request.userId, request.body);
+      return unwrapResult(result);
+    }
+  );
+
+  // PATCH /users/me/profile — set username
+  fastify.patch(
+    "/users/me/profile",
+    {
+      preHandler: [fastify.authenticate],
+      schema: { body: UpdateProfileBodySchema },
+    },
+    async (request) => {
+      const result = await service.updateUsername(
+        request.userId,
+        request.body.username,
+      );
       return unwrapResult(result);
     }
   );

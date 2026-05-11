@@ -56,6 +56,7 @@ export class ReviewsRepository {
     interval: number;
     repetitions: number;
     nextReviewAt: Date;
+    xpEarned: number;
   }) {
     const [row] = await this.db
       .insert(reviewLog)
