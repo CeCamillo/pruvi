@@ -3,11 +3,13 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { AnswerQuestionBodySchema } from "@pruvi/shared";
 import { ReviewsService } from "./reviews.service";
 import { ReviewsRepository } from "./reviews.repository";
+import { LivesRepository } from "../lives/lives.repository";
 import { db } from "@pruvi/db";
 import { unwrapResult, successResponse } from "../../types";
 
 const repo = new ReviewsRepository(db);
-const service = new ReviewsService(repo);
+const livesRepo = new LivesRepository(db);
+const service = new ReviewsService(repo, livesRepo);
 
 export const reviewsRoutes: FastifyPluginAsyncZod = async (fastify) => {
   // POST /questions/:questionId/answer

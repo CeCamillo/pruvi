@@ -9,9 +9,13 @@ import {
 import type { AppError } from "../../utils/errors";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import type { ReviewsRepository } from "./reviews.repository";
+import type { LivesRepository } from "../lives/lives.repository";
 
 export class ReviewsService {
-  constructor(private repo: ReviewsRepository) {}
+  constructor(
+    private repo: ReviewsRepository,
+    private livesRepo: LivesRepository,
+  ) {}
 
   /** Record an answer to a question */
   async answerQuestion(
@@ -79,34 +83,17 @@ export class ReviewsService {
       await this.repo.awardXp(userId, xpAwarded);
     }
 
-    // 7. Handle lives
-    let livesRemaining = 5;
-    const userLives = await this.repo.getUserLives(userId);
+    // 7. Handle lives — materialize regen, then atomic decrement on wrong answer
+    const now = new Date();
+    const materialized = await this.livesRepo.materializeRegen(userId, now);
+    let livesRemaining = materialized.lives;
 
-    if (userLives) {
-      livesRemaining = userLives.lives;
-
-      // Auto-refill if reset time has passed
-      if (userLives.livesResetAt && userLives.livesResetAt < new Date()) {
-        await this.repo.resetLives(userId);
-        livesRemaining = 5;
+    if (!correct) {
+      const decrement = await this.livesRepo.tryDecrement(userId, now);
+      if (!decrement.ok) {
+        return err(new ValidationError("No lives remaining. Wait for refill."));
       }
-
-      if (!correct) {
-        if (livesRemaining <= 0) {
-          return err(
-            new ValidationError("No lives remaining. Wait for refill.")
-          );
-        }
-
-        const isFirstDecrement = livesRemaining === 5;
-        await this.repo.decrementLives(
-          userId,
-          livesRemaining,
-          isFirstDecrement
-        );
-        livesRemaining -= 1;
-      }
+      livesRemaining = decrement.livesAfter;
     }
 
     return ok({
