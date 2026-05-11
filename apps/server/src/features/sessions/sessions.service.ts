@@ -87,6 +87,16 @@ export class SessionsService {
       AppError
     >
   > {
+    if (
+      !Number.isInteger(questionsAnswered) ||
+      !Number.isInteger(questionsCorrect) ||
+      questionsAnswered < 0 ||
+      questionsCorrect < 0 ||
+      questionsCorrect > questionsAnswered
+    ) {
+      return err(new ValidationError("Invalid session completion metrics"));
+    }
+
     const session = await this.repo.findSessionById(sessionId);
     if (!session) {
       return err(new NotFoundError("Session not found"));
