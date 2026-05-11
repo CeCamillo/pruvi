@@ -56,7 +56,7 @@ describe("ReviewsService.answerQuestion", () => {
 
     expect(mockRepo.insertReview).toHaveBeenCalledOnce();
     expect(mockRepo.insertReview).toHaveBeenCalledWith(
-      expect.objectContaining({ quality: 4, userId: USER_ID, questionId: QUESTION_ID })
+      expect.objectContaining({ quality: 4, userId: USER_ID, questionId: QUESTION_ID, xpEarned: 35 })
     );
 
     expect(mockRepo.awardXp).toHaveBeenCalledWith(USER_ID, 35);
@@ -78,7 +78,7 @@ describe("ReviewsService.answerQuestion", () => {
     expect(value.answer.livesRemaining).toBe(4);
 
     expect(mockRepo.insertReview).toHaveBeenCalledWith(
-      expect.objectContaining({ quality: 1 })
+      expect.objectContaining({ quality: 1, xpEarned: 0 })
     );
 
     expect(mockLivesRepo.tryDecrement).toHaveBeenCalledOnce();
