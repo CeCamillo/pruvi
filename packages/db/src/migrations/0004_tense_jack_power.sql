@@ -15,3 +15,5 @@ ALTER TABLE "push_token" ADD CONSTRAINT "push_token_user_id_user_id_fk" FOREIGN 
 CREATE INDEX "push_token_user_idx" ON "push_token" USING btree ("user_id");
 --> statement-breakpoint
 ALTER TABLE "user" ADD CONSTRAINT "user_notification_hour_chk" CHECK ("notification_hour" BETWEEN 0 AND 23);
+--> statement-breakpoint
+ALTER TABLE "push_token" ADD CONSTRAINT "push_token_platform_chk" CHECK ("platform" IN ('ios','android'));
