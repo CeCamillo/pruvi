@@ -1,18 +1,23 @@
 import { startSessionPrefetchWorker } from "./workers/session-prefetch.worker";
+import { startNotificationsWorker } from "./workers/notifications.worker";
 
-const worker = startSessionPrefetchWorker();
+const prefetch = startSessionPrefetchWorker();
+const notifications = startNotificationsWorker();
 
-if (!worker) {
-  console.error("Worker failed to start — REDIS_URL required");
+if (!prefetch && !notifications) {
+  console.error("All workers failed to start — REDIS_URL required");
   process.exit(1);
 }
 
-console.log("Session prefetch worker started");
+console.log("Workers started:", {
+  prefetch: !!prefetch,
+  notifications: !!notifications,
+});
 
-// Graceful shutdown
 const shutdown = async () => {
-  console.log("Shutting down worker...");
-  await worker.cleanup();
+  console.log("Shutting down workers...");
+  if (prefetch) await prefetch.cleanup();
+  if (notifications) await notifications.cleanup();
   process.exit(0);
 };
 
