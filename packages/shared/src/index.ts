@@ -11,3 +11,4 @@ export * from "./users";
 export * from "./progress";
 export * from "./mastery";
 export * from "./topics";
+export * from "./notifications";
