@@ -72,7 +72,16 @@ export class QuestionsRepository {
       }
 
       const unseen = await this.db
-        .select()
+        .select({
+          id: question.id,
+          subjectId: question.subjectId,
+          content: question.content,
+          options: question.options,
+          correctOptionIndex: question.correctOptionIndex,
+          difficulty: question.difficulty,
+          requiresCalculation: question.requiresCalculation,
+          source: question.source,
+        })
         .from(question)
         .where(and(...conditions))
         .limit(limit - selected.length);

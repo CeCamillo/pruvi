@@ -10,7 +10,7 @@ export const env = createEnv({
     CORS_ORIGIN: z.url(),
     REDIS_URL: z.string().default("redis://localhost:6379"),
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-    PORT: z.coerce.number().int().positive().default(3000),
+    PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     RESEND_API_KEY: z.string().min(1),
     RESEND_FROM_EMAIL: z.email(),
     GOOGLE_CLIENT_ID: z.string().min(1),

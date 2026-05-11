@@ -144,5 +144,21 @@ describe("SessionsService", () => {
       expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError);
       expect(result._unsafeUnwrapErr().message).toBe("Session already completed");
     });
+
+    it("rejects when questionsCorrect exceeds questionsAnswered", async () => {
+      const result = await service.completeSession("user-1", 1, 5, 8);
+
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError);
+      expect(result._unsafeUnwrapErr().message).toBe("Invalid session completion metrics");
+      expect(repo.findSessionById).not.toHaveBeenCalled();
+    });
+
+    it("rejects negative metrics", async () => {
+      const result = await service.completeSession("user-1", 1, -1, 0);
+
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError);
+    });
   });
 });

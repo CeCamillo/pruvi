@@ -83,10 +83,15 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         params: z.object({
           id: z.coerce.number().int(),
         }),
-        body: z.object({
-          questionsAnswered: z.number().int().min(0),
-          questionsCorrect: z.number().int().min(0),
-        }),
+        body: z
+          .object({
+            questionsAnswered: z.number().int().min(0),
+            questionsCorrect: z.number().int().min(0),
+          })
+          .refine((data) => data.questionsCorrect <= data.questionsAnswered, {
+            message: "questionsCorrect cannot exceed questionsAnswered",
+            path: ["questionsCorrect"],
+          }),
       },
     },
     async (request) => {
