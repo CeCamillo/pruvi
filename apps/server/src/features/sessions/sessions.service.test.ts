@@ -7,8 +7,8 @@ const mockSession = {
   id: 1,
   userId: "user-1",
   status: "active" as const,
-  questionCount: null,
-  correctCount: null,
+  questionsAnswered: null,
+  questionsCorrect: null,
   completedAt: null,
   createdAt: new Date(),
 };
@@ -115,7 +115,7 @@ describe("SessionsService", () => {
   describe("completeSession", () => {
     it("marks session as completed", async () => {
       const activeSession = { ...mockSession, status: "active", userId: "user-1" };
-      const completedSession = { ...mockSession, status: "completed", questionCount: 10, correctCount: 8, completedAt: new Date() };
+      const completedSession = { ...mockSession, status: "completed", questionsAnswered: 10, questionsCorrect: 8, completedAt: new Date() };
       repo.findSessionById.mockResolvedValue(activeSession);
       repo.completeSession.mockResolvedValue(completedSession);
 

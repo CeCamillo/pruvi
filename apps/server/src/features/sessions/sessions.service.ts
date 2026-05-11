@@ -79,8 +79,8 @@ export class SessionsService {
   async completeSession(
     userId: string,
     sessionId: number,
-    questionCount: number,
-    correctCount: number
+    questionsAnswered: number,
+    questionsCorrect: number
   ): Promise<
     Result<
       Awaited<ReturnType<SessionsRepository["completeSession"]>>,
@@ -100,8 +100,8 @@ export class SessionsService {
 
     const completed = await this.repo.completeSession(
       sessionId,
-      questionCount,
-      correctCount
+      questionsAnswered,
+      questionsCorrect
     );
     return ok(completed);
   }

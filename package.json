@@ -21,11 +21,14 @@
     "db:watch": "turbo -F @pruvi/db db:watch",
     "db:stop": "turbo -F @pruvi/db db:stop",
     "db:down": "turbo -F @pruvi/db db:down",
-    "db:seed": "turbo -F @pruvi/db db:seed"
+    "db:seed": "turbo -F @pruvi/db db:seed",
+    "verify:migration": "bun run scripts/verify-migration.ts"
   },
   "dependencies": {
     "@pruvi/env": "workspace:*",
     "dotenv": "catalog:",
+    "drizzle-orm": "^0.45.1",
+    "pg": "^8.17.1",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -48,9 +48,13 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy migrations for production DB setup
 COPY --from=builder /app/packages/db/src/migrations ./migrations
 
+# Copy entrypoint script (dispatches between server and worker via PROCESS_TYPE)
+COPY Dockerfile.entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 ENV NODE_ENV=production
 ENV PORT=3000
 
 EXPOSE 3000
 
-CMD ["bun", "run", "dist/index.mjs"]
+ENTRYPOINT ["/entrypoint.sh"]

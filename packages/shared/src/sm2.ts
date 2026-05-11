@@ -56,3 +56,46 @@ export function calculateSm2(input: Sm2Input): Result<Sm2Output, never> {
     nextReviewAt,
   });
 }
+
+/** SM-2 quality score: 0-5 scale used by the algorithm. */
+export type QualityScore = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** Initial SM-2 state for a question that has never been reviewed. */
+export const INITIAL_SM2_STATE = {
+  easinessFactor: 2.5,
+  interval: 0,
+  repetitions: 0,
+  nextReviewAt: new Date(0),
+} as const;
+
+/** Legacy 2-arg SM-2 API used by reviews.service.ts.
+ *  Takes prior state + quality, returns next state. */
+export function calculateSM2(
+  prev: {
+    easinessFactor: number;
+    interval: number;
+    repetitions: number;
+    nextReviewAt: Date;
+  },
+  quality: QualityScore
+): {
+  easinessFactor: number;
+  interval: number;
+  repetitions: number;
+  nextReviewAt: Date;
+} {
+  const result = calculateSm2({
+    quality,
+    repetitions: prev.repetitions,
+    easeFactor: prev.easinessFactor,
+    interval: prev.interval,
+  });
+  if (result.isErr()) throw result.error;
+  const out = result.value;
+  return {
+    easinessFactor: out.easeFactor,
+    interval: out.interval,
+    repetitions: out.repetitions,
+    nextReviewAt: new Date(out.nextReviewAt),
+  };
+}

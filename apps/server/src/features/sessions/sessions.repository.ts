@@ -35,15 +35,15 @@ export class SessionsRepository {
   /** Mark a session as completed */
   async completeSession(
     sessionId: number,
-    questionCount: number,
-    correctCount: number
+    questionsAnswered: number,
+    questionsCorrect: number
   ) {
     const [row] = await this.db
       .update(dailySession)
       .set({
         status: "completed",
-        questionCount,
-        correctCount,
+        questionsAnswered,
+        questionsCorrect,
         completedAt: new Date(),
       })
       .where(eq(dailySession.id, sessionId))

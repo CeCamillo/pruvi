@@ -1,5 +1,5 @@
 {
-  "id": "71a2002b-15f4-42bb-9ddf-90ff4304959a",
+  "id": "001dc26f-957f-438d-a1d6-bf79b4196a82",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -392,20 +392,9 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "integer",
+          "type": "serial",
           "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "always",
-            "name": "daily_session_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -420,15 +409,15 @@
           "notNull": true,
           "default": "'active'"
         },
-        "question_count": {
-          "name": "question_count",
+        "questions_answered": {
+          "name": "questions_answered",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "default": 0
         },
-        "correct_count": {
-          "name": "correct_count",
+        "questions_correct": {
+          "name": "questions_correct",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -498,20 +487,9 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "integer",
+          "type": "serial",
           "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "always",
-            "name": "subject_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
+          "notNull": true
         },
         "name": {
           "name": "name",
@@ -524,6 +502,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -555,25 +540,8 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "integer",
+          "type": "serial",
           "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "always",
-            "name": "question_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
-        },
-        "subject_id": {
-          "name": "subject_id",
-          "type": "integer",
-          "primaryKey": false,
           "notNull": true
         },
         "content": {
@@ -612,6 +580,19 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {

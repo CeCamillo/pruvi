@@ -51,32 +51,34 @@ CREATE TABLE "verification" (
 );
 --> statement-breakpoint
 CREATE TABLE "daily_session" (
-	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "daily_session_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"status" text DEFAULT 'active' NOT NULL,
-	"question_count" integer DEFAULT 0 NOT NULL,
-	"correct_count" integer DEFAULT 0 NOT NULL,
+	"questions_answered" integer DEFAULT 0 NOT NULL,
+	"questions_correct" integer DEFAULT 0 NOT NULL,
 	"completed_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "subject" (
-	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "subject_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"id" serial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "subject_name_unique" UNIQUE("name"),
 	CONSTRAINT "subject_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
 CREATE TABLE "question" (
-	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "question_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
-	"subject_id" integer NOT NULL,
+	"id" serial PRIMARY KEY NOT NULL,
 	"content" text NOT NULL,
 	"options" jsonb NOT NULL,
 	"correct_option_index" integer NOT NULL,
 	"difficulty" text NOT NULL,
 	"requires_calculation" boolean DEFAULT false NOT NULL,
-	"source" text
+	"source" text,
+	"subject_id" integer NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "review_log" (
