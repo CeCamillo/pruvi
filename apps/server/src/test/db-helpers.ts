@@ -31,26 +31,29 @@ export async function setupTestDb() {
     import.meta.dirname ?? ".",
     "../../../../packages/db/src/migrations"
   );
-  const migrationFile = readdirSync(migrationsDir)
+  const migrationFiles = readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))
-    .sort()[0];
-  if (!migrationFile) {
+    .sort();
+  if (migrationFiles.length === 0) {
     throw new Error(`No migration .sql file found in ${migrationsDir}`);
   }
-  const migrationSql = readFileSync(resolve(migrationsDir, migrationFile), "utf-8");
 
-  const statements = migrationSql
-    .split("--> statement-breakpoint")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  for (const migrationFile of migrationFiles) {
+    const migrationSql = readFileSync(resolve(migrationsDir, migrationFile), "utf-8");
 
-  for (const statement of statements) {
-    try {
-      await testPool.query(statement);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (!message.includes("already exists") && !message.includes("duplicate key")) {
-        throw err;
+    const statements = migrationSql
+      .split("--> statement-breakpoint")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    for (const statement of statements) {
+      try {
+        await testPool.query(statement);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!message.includes("already exists") && !message.includes("duplicate key")) {
+          throw err;
+        }
       }
     }
   }

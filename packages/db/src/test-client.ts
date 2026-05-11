@@ -18,6 +18,11 @@ export async function createTestDb() {
       lives_reset_at TIMESTAMP,
       total_xp INTEGER NOT NULL DEFAULT 0,
       current_level INTEGER NOT NULL DEFAULT 1,
+      selected_exam TEXT,
+      exam_date DATE,
+      difficulties TEXT[] NOT NULL DEFAULT '{}',
+      daily_study_time_minutes INTEGER,
+      onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
