@@ -14,10 +14,12 @@ function makeMockRepo() {
   return {
     findById: vi.fn(),
     updateProfile: vi.fn(),
+    updateUsername: vi.fn(),
     deleteUser: vi.fn(),
   } as unknown as UsersRepository & {
     findById: ReturnType<typeof vi.fn>;
     updateProfile: ReturnType<typeof vi.fn>;
+    updateUsername: ReturnType<typeof vi.fn>;
     deleteUser: ReturnType<typeof vi.fn>;
   };
 }
@@ -44,6 +46,45 @@ describe("UsersService", () => {
       const result = await service.updateProfile(USER_ID, { name: "X" });
       expect(result.isErr()).toBe(true);
       if (result.isErr()) expect(result.error.statusCode).toBe(404);
+    });
+  });
+
+  describe("updateUsername", () => {
+    it("returns updated username on success", async () => {
+      repo.updateUsername.mockResolvedValue({ username: "newuser" });
+      const result = await service.updateUsername(USER_ID, "newuser");
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) expect(result.value.username).toBe("newuser");
+    });
+
+    it("lowercases the username before saving", async () => {
+      repo.updateUsername.mockResolvedValue({ username: "myuser" });
+      await service.updateUsername(USER_ID, "MyUser");
+      expect(repo.updateUsername).toHaveBeenCalledWith(USER_ID, "myuser");
+    });
+
+    it("returns NotFoundError when user is missing", async () => {
+      repo.updateUsername.mockResolvedValue(undefined);
+      const result = await service.updateUsername(USER_ID, "ghost");
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) expect(result.error.statusCode).toBe(404);
+    });
+
+    it("returns ConflictError on user_username_unique violation", async () => {
+      repo.updateUsername.mockRejectedValue(
+        new Error("duplicate key value violates unique constraint: user_username_unique"),
+      );
+      const result = await service.updateUsername(USER_ID, "taken");
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.statusCode).toBe(409);
+        expect(result.error.message).toMatch(/taken/i);
+      }
+    });
+
+    it("re-throws unexpected DB errors", async () => {
+      repo.updateUsername.mockRejectedValue(new Error("connection reset"));
+      await expect(service.updateUsername(USER_ID, "test")).rejects.toThrow("connection reset");
     });
   });
 

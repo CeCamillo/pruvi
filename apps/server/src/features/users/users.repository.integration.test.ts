@@ -26,6 +26,35 @@ describe("UsersRepository (integration)", () => {
     await teardownTestDb();
   });
 
+  it("updateUsername rejects duplicate username with user_username_unique violation", async () => {
+    const userId1 = "test-user-username-1";
+    const userId2 = "test-user-username-2";
+
+    await db.insert(user).values([
+      {
+        id: userId1,
+        name: "User One",
+        email: `${userId1}@example.com`,
+        emailVerified: false,
+        updatedAt: new Date(),
+      },
+      {
+        id: userId2,
+        name: "User Two",
+        email: `${userId2}@example.com`,
+        emailVerified: false,
+        updatedAt: new Date(),
+      },
+    ]);
+
+    // First user sets "abc"
+    await repo.updateUsername(userId1, "abc");
+
+    // Second user tries to set same username — must throw (unique constraint)
+    // Drizzle wraps the pg error so we can only assert some error is thrown.
+    await expect(repo.updateUsername(userId2, "abc")).rejects.toThrow();
+  });
+
   it("deleteUser cascades to session, account, and daily_session rows", async () => {
     const userId = "test-user-cascade";
 

@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-/** PUT /users/me/profile — body */
-export const UpdateProfileBodySchema = z.object({
+/** PUT /users/me/profile — body (name + image fields) */
+export const UpdateBasicProfileBodySchema = z.object({
   name: z.string().min(1).max(80).optional(),
   image: z.url().nullable().optional(),
 });
 
-export type UpdateProfileBody = z.infer<typeof UpdateProfileBodySchema>;
+export type UpdateBasicProfileBody = z.infer<typeof UpdateBasicProfileBodySchema>;
 
 /** PUT /users/me/profile — response */
 export const ProfileResponseSchema = z.object({
