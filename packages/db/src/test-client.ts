@@ -23,6 +23,9 @@ export async function createTestDb() {
       difficulties TEXT[] NOT NULL DEFAULT '{}',
       daily_study_time_minutes INTEGER,
       onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
+      notification_hour INTEGER NOT NULL DEFAULT 19,
+      streak_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      achievement_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
@@ -124,6 +127,15 @@ export async function createTestDb() {
       questions_correct INTEGER NOT NULL DEFAULT 0,
       mastery_snapshot JSONB,
       completed_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS "push_token" (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      platform TEXT NOT NULL CHECK (platform IN ('ios','android')),
+      last_used_at TIMESTAMP NOT NULL DEFAULT NOW(),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `);
