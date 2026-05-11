@@ -7,19 +7,45 @@ import { QuestionsRepository } from "../questions/questions.repository";
 import { QuestionsService } from "../questions/questions.service";
 import { TopicsRepository } from "../topics/topics.repository";
 import { TopicsService } from "../topics/topics.service";
+import { TokensRepository } from "../notifications/tokens.repository";
+import { TokensService } from "../notifications/tokens.service";
+import { PreferencesRepository } from "../notifications/preferences.repository";
+import { SweepRepository } from "../notifications/sweep.repository";
+import { Dispatcher } from "../notifications/dispatcher";
+import { StreaksRepository } from "../streaks/streaks.repository";
+import { StreaksService } from "../streaks/streaks.service";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
-
-const sessionsRepo = new SessionsRepository(db);
-const questionsRepo = new QuestionsRepository(db);
-const questionsService = new QuestionsService(questionsRepo);
-const topicsRepo = new TopicsRepository(db);
-const topicsService = new TopicsService(topicsRepo);
-const service = new SessionsService(sessionsRepo, questionsService, topicsService);
 
 const SESSION_CACHE_TTL = 30; // 30 seconds
 
 export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
+  const sessionsRepo = new SessionsRepository(db);
+  const questionsRepo = new QuestionsRepository(db);
+  const questionsService = new QuestionsService(questionsRepo);
+  const topicsRepo = new TopicsRepository(db);
+  const topicsService = new TopicsService(topicsRepo);
+  const tokensRepo = new TokensRepository(db);
+  const tokensService = new TokensService(tokensRepo);
+  const prefsRepo = new PreferencesRepository(db);
+  const sweepRepo = new SweepRepository(db);
+  const streaksRepo = new StreaksRepository(db);
+  const streaksService = new StreaksService(streaksRepo);
+  const dispatcher = fastify.queues.notificationsSend
+    ? new Dispatcher({
+        tokensService,
+        prefsRepo,
+        sweepRepo,
+        sendQueue: fastify.queues.notificationsSend,
+      })
+    : null;
+  const service = new SessionsService(
+    sessionsRepo,
+    questionsService,
+    topicsService,
+    streaksService,
+    dispatcher,
+  );
   // POST /sessions/start
   fastify.post(
     "/sessions/start",
