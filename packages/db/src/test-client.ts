@@ -77,6 +77,7 @@ export async function createTestDb() {
       correct_option_index INTEGER NOT NULL,
       difficulty TEXT NOT NULL,
       requires_calculation BOOLEAN NOT NULL DEFAULT FALSE,
+      explanation TEXT,
       source TEXT,
       subject_id INTEGER NOT NULL REFERENCES "subject"(id),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()

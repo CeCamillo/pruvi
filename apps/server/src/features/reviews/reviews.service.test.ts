@@ -17,10 +17,11 @@ const service = new ReviewsService(mockRepo as any);
 const USER_ID = "user-1";
 const QUESTION_ID = 42;
 
-const makeQuestion = (overrides?: Partial<{ difficulty: string; correctOptionIndex: number }>) => ({
+const makeQuestion = (overrides?: Partial<{ difficulty: string; correctOptionIndex: number; explanation: string | null }>) => ({
   id: QUESTION_ID,
   correctOptionIndex: 2,
   difficulty: "medium",
+  explanation: null,
   ...overrides,
 });
 
@@ -164,5 +165,31 @@ describe("ReviewsService.answerQuestion", () => {
 
     expect(value.xpAwarded).toBe(0);
     expect(mockRepo.awardXp).not.toHaveBeenCalled();
+  });
+
+  it("includes explanation from question in the answer result", async () => {
+    mockRepo.findQuestionById.mockResolvedValue(
+      makeQuestion({ explanation: "F=ma is Newton's second law" })
+    );
+
+    const result = await service.answerQuestion(USER_ID, QUESTION_ID, 2);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.explanation).toBe("F=ma is Newton's second law");
+    }
+  });
+
+  it("returns null explanation when question has no explanation", async () => {
+    mockRepo.findQuestionById.mockResolvedValue(
+      makeQuestion({ explanation: null })
+    );
+
+    const result = await service.answerQuestion(USER_ID, QUESTION_ID, 2);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.explanation).toBeNull();
+    }
   });
 });
