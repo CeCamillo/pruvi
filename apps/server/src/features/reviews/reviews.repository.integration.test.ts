@@ -148,28 +148,4 @@ describe("ReviewsRepository (integration)", () => {
     });
   });
 
-  describe("decrementLives + resetLives", () => {
-    it("decrements lives and resets them to max", async () => {
-      await seedUser();
-
-      // Default lives should be 5
-      const initial = await repo.getUserLives("test-user-1");
-      expect(initial).not.toBeNull();
-      expect(initial!.lives).toBe(5);
-
-      // Decrement from 5 to 4 (setResetAt = true since going below max for first time)
-      await repo.decrementLives("test-user-1", 5, true);
-
-      const afterDecrement = await repo.getUserLives("test-user-1");
-      expect(afterDecrement!.lives).toBe(4);
-      expect(afterDecrement!.livesResetAt).toBeInstanceOf(Date);
-
-      // Reset lives back to MAX_LIVES (5)
-      await repo.resetLives("test-user-1");
-
-      const afterReset = await repo.getUserLives("test-user-1");
-      expect(afterReset!.lives).toBe(5);
-      expect(afterReset!.livesResetAt).toBeNull();
-    });
-  });
 });

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { LivesService } from "./lives.service";
+import { LIVES_REGEN_INTERVAL_MS } from "@pruvi/shared";
 
 function createMocks() {
   const repo = {
-    getUserLives: vi.fn(),
-    resetLives: vi.fn(),
+    materializeRegen: vi.fn(),
   };
   const service = new LivesService(repo as any);
   return { repo, service };
@@ -18,8 +18,8 @@ describe("LivesService", () => {
     ({ repo, service } = createMocks());
   });
 
-  it("returns default MAX_LIVES when user not found", async () => {
-    repo.getUserLives.mockResolvedValue(null);
+  it("returns MAX_LIVES with resetsAt null when user not found (materializeRegen fallback)", async () => {
+    repo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null });
 
     const result = await service.getLives("user-1");
 
@@ -30,8 +30,8 @@ describe("LivesService", () => {
     expect(value.resetsAt).toBeNull();
   });
 
-  it("returns full lives with no reset timer", async () => {
-    repo.getUserLives.mockResolvedValue({ lives: 5, livesResetAt: null });
+  it("returns full lives with resetsAt null when lives at MAX and anchor is null", async () => {
+    repo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null });
 
     const result = await service.getLives("user-1");
 
@@ -41,30 +41,27 @@ describe("LivesService", () => {
     expect(value.resetsAt).toBeNull();
   });
 
-  it("auto-refills lives when livesResetAt is in the past", async () => {
-    const pastDate = new Date(Date.now() - 60_000); // 1 minute ago
-    repo.getUserLives.mockResolvedValue({ lives: 2, livesResetAt: pastDate });
-    repo.resetLives.mockResolvedValue(undefined);
-
-    const result = await service.getLives("user-1");
-
-    expect(result.isOk()).toBe(true);
-    const value = result._unsafeUnwrap();
-    expect(value.lives).toBe(5);
-    expect(value.resetsAt).toBeNull();
-    expect(repo.resetLives).toHaveBeenCalledWith("user-1");
-  });
-
-  it("returns partial lives with future resetsAt as-is", async () => {
-    const futureDate = new Date(Date.now() + 3_600_000); // 1 hour from now
-    repo.getUserLives.mockResolvedValue({ lives: 3, livesResetAt: futureDate });
+  it("returns partial lives with resetsAt = anchor + 4h", async () => {
+    const anchor = new Date("2026-05-11T08:00:00Z");
+    repo.materializeRegen.mockResolvedValue({ lives: 3, lastRegenAt: anchor });
 
     const result = await service.getLives("user-1");
 
     expect(result.isOk()).toBe(true);
     const value = result._unsafeUnwrap();
     expect(value.lives).toBe(3);
-    expect(value.resetsAt).toEqual(futureDate);
-    expect(repo.resetLives).not.toHaveBeenCalled();
+    expect(value.resetsAt).toEqual(new Date(anchor.getTime() + LIVES_REGEN_INTERVAL_MS));
+  });
+
+  it("returns 0 lives with resetsAt = anchor + 4h (not null)", async () => {
+    const anchor = new Date("2026-05-11T06:00:00Z");
+    repo.materializeRegen.mockResolvedValue({ lives: 0, lastRegenAt: anchor });
+
+    const result = await service.getLives("user-1");
+
+    expect(result.isOk()).toBe(true);
+    const value = result._unsafeUnwrap();
+    expect(value.lives).toBe(0);
+    expect(value.resetsAt).toEqual(new Date(anchor.getTime() + LIVES_REGEN_INTERVAL_MS));
   });
 });

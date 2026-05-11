@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, sql, and, gt } from "drizzle-orm";
 import { user } from "@pruvi/db/schema/auth";
 import type { db } from "@pruvi/db";
-import { MAX_LIVES } from "@pruvi/shared";
+import { MAX_LIVES, computeRegenSnapshot } from "@pruvi/shared";
 
 type DbClient = typeof db;
 
@@ -12,7 +12,7 @@ export class LivesRepository {
     const rows = await this.db
       .select({
         lives: user.lives,
-        livesResetAt: user.livesResetAt,
+        livesLastRegenAt: user.livesLastRegenAt,
       })
       .from(user)
       .where(eq(user.id, userId))
@@ -20,11 +20,45 @@ export class LivesRepository {
     return rows[0] ?? null;
   }
 
-  /** Reset lives to MAX and clear the timer */
-  async resetLives(userId: string) {
-    await this.db
+  async materializeRegen(
+    userId: string,
+    now: Date,
+  ): Promise<{ lives: number; lastRegenAt: Date | null }> {
+    const current = await this.getUserLives(userId);
+    if (!current) {
+      return { lives: MAX_LIVES, lastRegenAt: null };
+    }
+    const snap = computeRegenSnapshot(current.lives, current.livesLastRegenAt, now);
+    if (snap.regenerated > 0) {
+      await this.db
+        .update(user)
+        .set({ lives: snap.lives, livesLastRegenAt: snap.lastRegenAt })
+        .where(eq(user.id, userId));
+    }
+    return { lives: snap.lives, lastRegenAt: snap.lastRegenAt };
+  }
+
+  async tryDecrement(
+    userId: string,
+    now: Date,
+  ): Promise<
+    | { ok: true; livesAfter: number; lastRegenAt: Date | null }
+    | { ok: false }
+  > {
+    const result = await this.db
       .update(user)
-      .set({ lives: MAX_LIVES, livesResetAt: null })
-      .where(eq(user.id, userId));
+      .set({
+        lives: sql`${user.lives} - 1`,
+        livesLastRegenAt: sql`COALESCE(${user.livesLastRegenAt}, ${now})`,
+      })
+      .where(and(eq(user.id, userId), gt(user.lives, 0)))
+      .returning({
+        lives: user.lives,
+        livesLastRegenAt: user.livesLastRegenAt,
+      });
+
+    const row = result[0];
+    if (!row) return { ok: false };
+    return { ok: true, livesAfter: row.lives, lastRegenAt: row.livesLastRegenAt };
   }
 }

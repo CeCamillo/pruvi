@@ -4,7 +4,6 @@ import { subtopic } from "@pruvi/db/schema/topics";
 import { reviewLog } from "@pruvi/db/schema/review-log";
 import { user } from "@pruvi/db/schema/auth";
 import type { db } from "@pruvi/db";
-import { MAX_LIVES } from "@pruvi/shared";
 
 type DbClient = typeof db;
 
@@ -65,19 +64,6 @@ export class ReviewsRepository {
     return row;
   }
 
-  /** Get user's current lives */
-  async getUserLives(userId: string) {
-    const rows = await this.db
-      .select({
-        lives: user.lives,
-        livesResetAt: user.livesResetAt,
-      })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-    return rows[0] ?? null;
-  }
-
   /** Award XP to user */
   async awardXp(userId: string, xpAmount: number) {
     await this.db
@@ -88,25 +74,4 @@ export class ReviewsRepository {
       .where(eq(user.id, userId));
   }
 
-  /** Reset lives to MAX and clear the timer */
-  async resetLives(userId: string) {
-    await this.db
-      .update(user)
-      .set({ lives: MAX_LIVES, livesResetAt: null })
-      .where(eq(user.id, userId));
-  }
-
-  /** Decrement user's lives by 1 */
-  async decrementLives(userId: string, currentLives: number, setResetAt: boolean) {
-    const updates: Record<string, unknown> = {
-      lives: currentLives - 1,
-    };
-    if (setResetAt) {
-      updates.livesResetAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    }
-    await this.db
-      .update(user)
-      .set(updates)
-      .where(eq(user.id, userId));
-  }
 }

@@ -36,6 +36,13 @@
       "when": 1778465570446,
       "tag": "0004_tense_jack_power",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778538917291,
+      "tag": "0005_black_stephen_strange",
+      "breakpoints": true
     }
   ]
 }
