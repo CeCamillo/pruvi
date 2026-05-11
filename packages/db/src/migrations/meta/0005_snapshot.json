@@ -1,6 +1,6 @@
 {
-  "id": "c8e91a2b-3d4f-5e6a-7b8c-9d0e1f2a3b4c",
-  "prevId": "b4442195-5bc7-4a50-a75f-a99ac8326520",
+  "id": "cca3d814-79d0-436b-976f-2fcc8d31a722",
+  "prevId": "c8e91a2b-3d4f-5e6a-7b8c-9d0e1f2a3b4c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -268,6 +268,12 @@
           "notNull": true,
           "default": 5
         },
+        "lives_last_regen_at": {
+          "name": "lives_last_regen_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "total_xp": {
           "name": "total_xp",
           "type": "integer",
@@ -348,12 +354,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "lives_reset_at": {
-          "name": "lives_reset_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
