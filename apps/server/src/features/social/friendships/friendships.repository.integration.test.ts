@@ -5,6 +5,7 @@ import {
   teardownTestDb,
   getTestDb,
 } from "../../../test/db-helpers";
+import { eq } from "drizzle-orm";
 import { user } from "@pruvi/db/schema/auth";
 import { friendship } from "@pruvi/db/schema/friendship";
 import { FriendshipsRepository } from "./friendships.repository";
@@ -166,10 +167,10 @@ describe("FriendshipsRepository (integration)", () => {
       const [updated] = await db
         .select()
         .from(friendship)
-        .where((t) => t.id === created.id);
-      // Just verify via repo.getRequest no longer finds it (pending gone)
-      const req = await repo.getRequest(created.id, "r1");
-      expect(req).toBeNull(); // no longer pending
+        .where(eq(friendship.id, created.id));
+      expect(updated?.status).toBe("accepted");
+      expect(updated?.acceptedAt).not.toBeNull();
+      expect(updated?.acceptedAt).toBeInstanceOf(Date);
     });
 
     it("updates status to declined and leaves acceptedAt null", async () => {
@@ -179,8 +180,12 @@ describe("FriendshipsRepository (integration)", () => {
 
       await repo.respond(created.id, "decline");
 
-      const req = await repo.getRequest(created.id, "r2");
-      expect(req).toBeNull(); // no longer pending
+      const [updated] = await db
+        .select()
+        .from(friendship)
+        .where(eq(friendship.id, created.id));
+      expect(updated?.status).toBe("declined");
+      expect(updated?.acceptedAt).toBeNull();
     });
   });
 
