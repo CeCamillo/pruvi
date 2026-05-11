@@ -4,6 +4,8 @@ import { NotFoundError, ValidationError } from "../../utils/errors";
 import type { SessionsRepository } from "./sessions.repository";
 import type { QuestionsService } from "../questions/questions.service";
 import type { TopicsService } from "../topics/topics.service";
+import type { Dispatcher } from "../notifications/dispatcher";
+import type { StreaksService } from "../streaks/streaks.service";
 
 type SessionRow = NonNullable<Awaited<ReturnType<SessionsRepository["findTodaySession"]>>>;
 type QuestionItem = { id: number; subtopicId: number; [key: string]: unknown };
@@ -13,6 +15,8 @@ export class SessionsService {
     private repo: SessionsRepository,
     private questionsService: QuestionsService,
     private topicsService: TopicsService,
+    private streaksService: StreaksService | null = null,
+    private dispatcher: Dispatcher | null = null,
   ) {}
 
   /** Start or resume today's session */
@@ -144,6 +148,31 @@ export class SessionsService {
     }
 
     const completed = await this.repo.completeSession(sessionId, questionsAnswered, questionsCorrect);
+
+    // Fire-and-forget achievement notifications
+    if (this.dispatcher) {
+      if (this.streaksService) {
+        this.streaksService
+          .getStreaks(userId)
+          .then((r) => {
+            if (r.isOk() && (r.value.currentStreak === 7 || r.value.currentStreak === 30)) {
+              const kind = `${r.value.currentStreak}-day-streak` as "7-day-streak" | "30-day-streak";
+              this.dispatcher!
+                .sendAchievementNotification(userId, kind)
+                .catch((e) => console.error("streak achievement push failed", e));
+            }
+          })
+          .catch((e) => console.error("streak read failed in achievement hook", e));
+      }
+      for (const t of transitions) {
+        if (t.to === "quase_mestre") {
+          this.dispatcher
+            .sendAchievementNotification(userId, "quase-mestre", { subtopicName: t.name })
+            .catch((e) => console.error("mastery achievement push failed", e));
+        }
+      }
+    }
+
     return ok({ session: completed, transitions });
   }
 }
