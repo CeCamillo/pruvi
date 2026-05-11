@@ -1,7 +1,8 @@
 import { relations } from "drizzle-orm";
-import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
+import type { MasteryState } from "@pruvi/shared";
 
 export const dailySession = pgTable(
   "daily_session",
@@ -13,6 +14,7 @@ export const dailySession = pgTable(
     status: text("status", { enum: ["active", "completed"] }).notNull().default("active"),
     questionsAnswered: integer("questions_answered").notNull().default(0),
     questionsCorrect: integer("questions_correct").notNull().default(0),
+    masterySnapshot: jsonb("mastery_snapshot").$type<Record<string, MasteryState>>(),
     completedAt: timestamp("completed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

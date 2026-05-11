@@ -35,6 +35,7 @@ export class QuestionsRepository {
         .select({
           id: question.id,
           subjectId: question.subjectId,
+          subtopicId: question.subtopicId,
           content: question.content,
           options: question.options,
           correctOptionIndex: question.correctOptionIndex,
@@ -75,6 +76,7 @@ export class QuestionsRepository {
         .select({
           id: question.id,
           subjectId: question.subjectId,
+          subtopicId: question.subtopicId,
           content: question.content,
           options: question.options,
           correctOptionIndex: question.correctOptionIndex,
@@ -101,6 +103,7 @@ export class QuestionsRepository {
         .select({
           id: question.id,
           subjectId: question.subjectId,
+          subtopicId: question.subtopicId,
           content: question.content,
           options: question.options,
           correctOptionIndex: question.correctOptionIndex,

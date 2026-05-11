@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@pruvi/env": "workspace:*",
+    "@pruvi/shared": "workspace:*",
     "dotenv": "catalog:",
     "pg": "^8.17.1",
     "zod": "catalog:"
