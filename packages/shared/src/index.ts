@@ -9,3 +9,5 @@ export * from "./streaks";
 export * from "./onboarding";
 export * from "./users";
 export * from "./progress";
+export * from "./mastery";
+export * from "./topics";

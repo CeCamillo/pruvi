@@ -60,4 +60,25 @@ export class SessionsRepository {
       .limit(1);
     return rows[0] ?? null;
   }
+
+  /** Snapshot mastery state for the session (called at start). */
+  async writeMasterySnapshot(
+    sessionId: number,
+    snapshot: Record<string, "aprendendo" | "entendendo" | "afiado" | "quase_mestre">,
+  ) {
+    await this.db
+      .update(dailySession)
+      .set({ masterySnapshot: snapshot })
+      .where(eq(dailySession.id, sessionId));
+  }
+
+  /** Read the snapshot (used at complete to compute transitions). */
+  async readMasterySnapshot(sessionId: number) {
+    const [row] = await this.db
+      .select({ snapshot: dailySession.masterySnapshot })
+      .from(dailySession)
+      .where(eq(dailySession.id, sessionId))
+      .limit(1);
+    return row?.snapshot ?? null;
+  }
 }

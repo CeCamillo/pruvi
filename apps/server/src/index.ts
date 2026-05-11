@@ -16,6 +16,7 @@ import { reviewsRoutes } from "./features/reviews";
 import { sessionsRoutes } from "./features/sessions";
 import { streaksRoutes } from "./features/streaks";
 import { subjectsRoutes } from "./features/subjects";
+import { topicsRoutes } from "./features/topics";
 import { usersRoutes } from "./features/users";
 import { authPlugin } from "./plugins/auth";
 import { errorHandlerPlugin } from "./plugins/error-handler";
@@ -75,6 +76,7 @@ export async function buildApp() {
   await app.register(usersRoutes);
   await app.register(progressRoutes);
   await app.register(subjectsRoutes);
+  await app.register(topicsRoutes);
 
   // Health check — verifies DB connectivity for ALB
   app.get("/health", async (_request, reply) => {

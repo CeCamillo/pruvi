@@ -3,40 +3,50 @@ import type { AppError } from "../../utils/errors";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import type { SessionsRepository } from "./sessions.repository";
 import type { QuestionsService } from "../questions/questions.service";
-import type { QuestionsRepository } from "../questions/questions.repository";
+import type { TopicsService } from "../topics/topics.service";
+
+type SessionRow = NonNullable<Awaited<ReturnType<SessionsRepository["findTodaySession"]>>>;
+type QuestionItem = { id: number; subtopicId: number; [key: string]: unknown };
 
 export class SessionsService {
   constructor(
     private repo: SessionsRepository,
-    private questionsService: QuestionsService
+    private questionsService: QuestionsService,
+    private topicsService: TopicsService,
   ) {}
 
   /** Start or resume today's session */
   async startSession(
     userId: string,
     mode: "all" | "theoretical",
-    skipQuestions = false
+    skipQuestions = false,
+    topicId?: number,
   ): Promise<
     Result<
       {
-        session: Awaited<ReturnType<SessionsRepository["createSession"]>>;
-        questions: Awaited<
-          ReturnType<QuestionsRepository["selectQuestions"]>
-        >;
+        session: SessionRow;
+        questions: QuestionItem[];
       },
       AppError
     >
   > {
+    // Validate subtopic exists before doing any session work
+    if (topicId) {
+      const subtopic = await this.topicsService.findSubtopicById(topicId);
+      if (!subtopic) {
+        return err(new NotFoundError("Subtopic not found"));
+      }
+    }
+
     // Check if there's already an active session today
     const existing = await this.repo.findTodaySession(userId);
     if (existing && existing.status === "active") {
       // Resume: always fetch fresh questions (cache is for new sessions)
-      const questionsResult = await this.questionsService.selectForSession(
-        userId,
-        mode
-      );
-      if (questionsResult.isErr()) return err(questionsResult.error);
-      return ok({ session: existing, questions: questionsResult.value });
+      const qResult = topicId
+        ? await this.questionsService.selectForSubtopic(userId, topicId)
+        : await this.questionsService.selectForSession(userId, mode);
+      if (qResult.isErr()) return err(qResult.error);
+      return ok({ session: existing, questions: qResult.value as QuestionItem[] });
     }
 
     if (existing && existing.status === "completed") {
@@ -47,19 +57,30 @@ export class SessionsService {
 
     // Create new session
     const session = await this.repo.createSession(userId);
+    if (!session) {
+      return err(new NotFoundError("Failed to create session"));
+    }
 
     // Skip question selection if caller has cached questions
     if (skipQuestions) {
-      return ok({ session, questions: [] });
+      return ok({ session, questions: [] as QuestionItem[] });
     }
 
-    const questionsResult = await this.questionsService.selectForSession(
-      userId,
-      mode
-    );
-    if (questionsResult.isErr()) return err(questionsResult.error);
+    const qResult = topicId
+      ? await this.questionsService.selectForSubtopic(userId, topicId)
+      : await this.questionsService.selectForSession(userId, mode);
+    if (qResult.isErr()) return err(qResult.error);
 
-    return ok({ session, questions: questionsResult.value });
+    // Snapshot mastery for subtopics touched by the selected questions
+    const subtopicIds = Array.from(
+      new Set(qResult.value.map((q: { subtopicId: number }) => q.subtopicId)),
+    );
+    if (subtopicIds.length > 0) {
+      const snapshot = await this.topicsService.snapshotMastery(userId, subtopicIds);
+      await this.repo.writeMasterySnapshot(session.id, snapshot);
+    }
+
+    return ok({ session, questions: qResult.value as QuestionItem[] });
   }
 
   /** Get today's session if it exists */
@@ -80,10 +101,13 @@ export class SessionsService {
     userId: string,
     sessionId: number,
     questionsAnswered: number,
-    questionsCorrect: number
+    questionsCorrect: number,
   ): Promise<
     Result<
-      Awaited<ReturnType<SessionsRepository["completeSession"]>>,
+      {
+        session: Awaited<ReturnType<SessionsRepository["completeSession"]>>;
+        transitions: import("@pruvi/shared").MasteryTransition[];
+      },
       AppError
     >
   > {
@@ -108,11 +132,18 @@ export class SessionsService {
       return err(new ValidationError("Session already completed"));
     }
 
-    const completed = await this.repo.completeSession(
-      sessionId,
-      questionsAnswered,
-      questionsCorrect
-    );
-    return ok(completed);
+    const snapshot = await this.repo.readMasterySnapshot(sessionId);
+    let transitions: import("@pruvi/shared").MasteryTransition[] = [];
+    if (snapshot) {
+      const subtopicIds = Object.keys(snapshot).map(Number);
+      const { currentMap, namesMap } = await this.topicsService.getCurrentMasteryAndNames(
+        userId,
+        subtopicIds,
+      );
+      transitions = this.topicsService.computeTransitions(snapshot, currentMap, namesMap);
+    }
+
+    const completed = await this.repo.completeSession(sessionId, questionsAnswered, questionsCorrect);
+    return ok({ session: completed, transitions });
   }
 }

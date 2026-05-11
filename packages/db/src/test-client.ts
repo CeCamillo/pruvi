@@ -70,6 +70,26 @@ export async function createTestDb() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS "topic" (
+      id SERIAL PRIMARY KEY,
+      subject_id INTEGER NOT NULL REFERENCES "subject"(id),
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE (subject_id, slug)
+    );
+
+    CREATE TABLE IF NOT EXISTS "subtopic" (
+      id SERIAL PRIMARY KEY,
+      topic_id INTEGER NOT NULL REFERENCES "topic"(id),
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE (topic_id, slug)
+    );
+
     CREATE TABLE IF NOT EXISTS "question" (
       id SERIAL PRIMARY KEY,
       content TEXT NOT NULL,
@@ -80,6 +100,7 @@ export async function createTestDb() {
       explanation TEXT,
       source TEXT,
       subject_id INTEGER NOT NULL REFERENCES "subject"(id),
+      subtopic_id INTEGER NOT NULL REFERENCES "subtopic"(id),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
@@ -101,6 +122,7 @@ export async function createTestDb() {
       status TEXT NOT NULL DEFAULT 'active',
       questions_answered INTEGER NOT NULL DEFAULT 0,
       questions_correct INTEGER NOT NULL DEFAULT 0,
+      mastery_snapshot JSONB,
       completed_at TIMESTAMP,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );

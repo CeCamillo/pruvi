@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import { boolean, index, integer, jsonb, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
 import { subject } from "./subjects";
+import { subtopic } from "./topics";
 
 export const question = pgTable(
   "question",
@@ -17,10 +18,14 @@ export const question = pgTable(
     subjectId: integer("subject_id")
       .notNull()
       .references(() => subject.id),
+    subtopicId: integer("subtopic_id")
+      .notNull()
+      .references(() => subtopic.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("question_subject_difficulty_idx").on(table.subjectId, table.difficulty),
+    index("question_subtopic_difficulty_idx").on(table.subtopicId, table.difficulty),
   ],
 );
 
@@ -28,5 +33,9 @@ export const questionRelations = relations(question, ({ one }) => ({
   subject: one(subject, {
     fields: [question.subjectId],
     references: [subject.id],
+  }),
+  subtopic: one(subtopic, {
+    fields: [question.subtopicId],
+    references: [subtopic.id],
   }),
 }));

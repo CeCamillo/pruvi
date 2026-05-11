@@ -17,15 +17,18 @@ export class ReviewsService {
   async answerQuestion(
     userId: string,
     questionId: number,
-    selectedOptionIndex: number
+    selectedOptionIndex: number,
   ): Promise<
     Result<
       {
-        correct: boolean;
-        correctOptionIndex: number;
-        livesRemaining: number;
-        xpAwarded: number;
-        explanation: string | null;
+        answer: {
+          correct: boolean;
+          correctOptionIndex: number;
+          livesRemaining: number;
+          xpAwarded: number;
+          explanation: string | null;
+        };
+        cacheTargets: { subjectId: number; topicId: number };
       },
       AppError
     >
@@ -107,11 +110,14 @@ export class ReviewsService {
     }
 
     return ok({
-      correct,
-      correctOptionIndex: q.correctOptionIndex,
-      livesRemaining,
-      xpAwarded,
-      explanation: q.explanation ?? null,
+      answer: {
+        correct,
+        correctOptionIndex: q.correctOptionIndex,
+        livesRemaining,
+        xpAwarded,
+        explanation: q.explanation ?? null,
+      },
+      cacheTargets: { subjectId: q.subjectId, topicId: q.topicId },
     });
   }
 }
