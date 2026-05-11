@@ -12,3 +12,5 @@ export * from "./progress";
 export * from "./mastery";
 export * from "./topics";
 export * from "./notifications";
+export * from "./social";
+export * from "./weekly";
