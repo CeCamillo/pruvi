@@ -9,7 +9,7 @@ import {
   validatorCompiler,
 } from "fastify-type-provider-zod";
 import { gamificationRoutes } from "./features/gamification";
-import { tokensRoutes } from "./features/notifications";
+import { tokensRoutes, preferencesRoutes } from "./features/notifications";
 import { livesRoutes } from "./features/lives";
 import { onboardingRoutes } from "./features/onboarding";
 import { progressRoutes } from "./features/progress";
@@ -79,6 +79,7 @@ export async function buildApp() {
   await app.register(subjectsRoutes);
   await app.register(topicsRoutes);
   await app.register(tokensRoutes);
+  await app.register(preferencesRoutes);
 
   // Health check — verifies DB connectivity for ALB
   app.get("/health", async (_request, reply) => {
