@@ -14,6 +14,8 @@ import { UltraService } from "../ultra/ultra.service";
 import { loadServiceAccountFromEnv } from "./google-play.service-account";
 import { GooglePlayApiClient } from "./google-play.api-client";
 import { AppStoreJwsVerifier } from "./app-store.jws-verifier";
+import { GoogleJwksCache } from "./google-oidc.jwks-cache";
+import { GoogleOidcVerifier, OidcVerificationError } from "./google-oidc.verifier";
 
 const repo = new BillingRepository();
 const ultra = new UltraService(new UltraRepository(db));
@@ -59,6 +61,37 @@ export const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
   const jwsVerifier = AppStoreJwsVerifier.fromBundledRoot();
   const service = new BillingService(db, repo, ultra, apiClient, env.GOOGLE_PLAY_PACKAGE_NAME ?? null, jwsVerifier);
 
+  let googlePreHandler = webhookGuard;
+  if (env.GOOGLE_PLAY_VERIFY_OIDC) {
+    if (!env.GOOGLE_PLAY_OIDC_AUDIENCE || !env.GOOGLE_PLAY_OIDC_SERVICE_ACCOUNT_EMAIL) {
+      throw new Error(
+        "GOOGLE_PLAY_VERIFY_OIDC requires GOOGLE_PLAY_OIDC_AUDIENCE and GOOGLE_PLAY_OIDC_SERVICE_ACCOUNT_EMAIL",
+      );
+    }
+    const jwks = new GoogleJwksCache({ logger: fastify.log });
+    const oidcVerifier = new GoogleOidcVerifier({
+      jwks,
+      expectedAudience: env.GOOGLE_PLAY_OIDC_AUDIENCE,
+      expectedEmail: env.GOOGLE_PLAY_OIDC_SERVICE_ACCOUNT_EMAIL,
+    });
+    googlePreHandler = async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = request.headers.authorization;
+      if (typeof auth !== "string" || !auth.startsWith("Bearer ")) {
+        throw new UnauthorizedError("UNAUTHORIZED");
+      }
+      const jwt = auth.slice("Bearer ".length).trim();
+      try {
+        await oidcVerifier.verify(jwt);
+      } catch (e) {
+        if (e instanceof OidcVerificationError) {
+          fastify.log.warn({ err: e.message }, "google-play oidc verification failed");
+          throw new UnauthorizedError("UNAUTHORIZED");
+        }
+        throw e;
+      }
+    };
+  }
+
   fastify.post(
     "/webhooks/google-play",
     {
@@ -71,7 +104,7 @@ export const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
           }),
         },
       },
-      preHandler: [webhookGuard],
+      preHandler: [googlePreHandler],
     },
     async (request) => {
       const result = await service.processGooglePlayEnvelope(request.body);

@@ -1,4 +1,4 @@
-import { createVerify, type KeyObject } from "node:crypto";
+import { createVerify } from "node:crypto";
 import type { GoogleJwksCache } from "./google-oidc.jwks-cache";
 
 export class OidcVerificationError extends Error {

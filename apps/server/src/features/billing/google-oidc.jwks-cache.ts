@@ -51,7 +51,7 @@ export class GoogleJwksCache {
     }
     let body: { keys?: Array<Record<string, string>> };
     try {
-      body = await res.json();
+      body = (await res.json()) as { keys?: Array<Record<string, string>> };
     } catch (e) {
       this.logger.error({ err: (e as Error).message }, "google-oidc jwks non-json body");
       return;
