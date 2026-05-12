@@ -6,6 +6,16 @@ import { unwrapResult } from "../../../types";
 import { InvitationsRepository } from "./invitations.repository";
 import { InvitationsService } from "./invitations.service";
 
+const AcceptInvitationResponseSchema = z.object({
+  inviter: z.object({ name: z.string(), username: z.string().nullable() }),
+  reward: z.object({
+    type: z.enum(["xp", "shield"]),
+    xpAwarded: z.number().int(),
+    shieldGranted: z.boolean(),
+  }),
+  friendshipCreated: z.literal(true),
+});
+
 const repo = new InvitationsRepository(db);
 const service = new InvitationsService(repo);
 
@@ -30,7 +40,10 @@ export const invitationsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     "/invitations/accept",
     {
       preHandler: [fastify.authenticate],
-      schema: { body: AcceptInvitationBodySchema },
+      schema: {
+        body: AcceptInvitationBodySchema,
+        response: { 200: z.object({ success: z.literal(true), data: AcceptInvitationResponseSchema }) },
+      },
     },
     async (request) => {
       const { code } = request.body;

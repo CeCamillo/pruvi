@@ -47,6 +47,15 @@ export class UsersRepository {
     return row;
   }
 
+  async updateInviteRewardPreference(userId: string, preference: "xp" | "shield") {
+    const [row] = await this.db
+      .update(user)
+      .set({ inviteRewardPreference: preference })
+      .where(eq(user.id, userId))
+      .returning({ preference: user.inviteRewardPreference });
+    return row;
+  }
+
   async deleteUser(userId: string) {
     await this.db.delete(user).where(eq(user.id, userId));
   }

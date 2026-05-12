@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { UpdateBasicProfileBodySchema, UpdateProfileBodySchema } from "@pruvi/shared";
+import { UpdateBasicProfileBodySchema, UpdateProfileBodySchema, InviteRewardPreferenceBodySchema, InviteRewardPreferenceResponseSchema } from "@pruvi/shared";
+import { z } from "zod";
 import { db } from "@pruvi/db";
 import { UsersRepository } from "./users.repository";
 import { UsersService } from "./users.service";
@@ -35,6 +36,23 @@ export const usersRoutes: FastifyPluginAsyncZod = async (fastify) => {
       );
       return unwrapResult(result);
     }
+  );
+
+  // PATCH /users/me/invite-reward-preference — set invite reward preference
+  fastify.patch(
+    "/users/me/invite-reward-preference",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        body: InviteRewardPreferenceBodySchema,
+        response: { 200: z.object({ success: z.literal(true), data: InviteRewardPreferenceResponseSchema }) },
+      },
+    },
+    async (request) => {
+      const { preference } = request.body;
+      const result = await service.updateInviteRewardPreference(request.userId, preference);
+      return unwrapResult(result);
+    },
   );
 
   fastify.delete(

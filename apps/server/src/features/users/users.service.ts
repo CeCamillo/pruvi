@@ -49,6 +49,17 @@ export class UsersService {
     }
   }
 
+  async updateInviteRewardPreference(
+    userId: string,
+    preference: "xp" | "shield"
+  ): Promise<Result<{ preference: "xp" | "shield" }, AppError>> {
+    const row = await this.repo.updateInviteRewardPreference(userId, preference);
+    if (!row) {
+      return err(new NotFoundError("User not found"));
+    }
+    return ok({ preference: row.preference as "xp" | "shield" });
+  }
+
   async deleteAccount(userId: string): Promise<Result<true, AppError>> {
     const existing = await this.repo.findById(userId);
     if (!existing) {
