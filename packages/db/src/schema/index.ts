@@ -10,3 +10,4 @@ export * from "./invitation-acceptance";
 export * from "./streak-shield-usage";
 export * from "./weekly-simulado";
 export * from "./billing";
+export * from "./lives-purchase";

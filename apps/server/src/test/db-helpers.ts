@@ -66,7 +66,7 @@ export async function cleanupTestDb() {
     TRUNCATE TABLE billing_event, subscription,
       weekly_simulado_question, weekly_simulado,
       push_token, review_log, daily_session, streak_shield_usage,
-      question, subtopic, topic, subject,
+      lives_purchase, question, subtopic, topic, subject,
       account, session, verification, "user" CASCADE
   `);
 }
