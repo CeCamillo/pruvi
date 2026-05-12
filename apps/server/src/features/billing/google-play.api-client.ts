@@ -31,34 +31,34 @@ export class GooglePlayApiClient {
     try {
       res = await this.fetchImpl(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
     } catch (e) {
-      this.logger.warn({ err: (e as Error).message, packageName }, "google-play subscriptionsv2.get network error");
+      this.logger.warn({ err: (e as Error).message, packageName, purchaseToken }, "google-play subscriptionsv2.get network error");
       return null;
     }
     if (res.status === 401) {
       this.tokenCache = null;
-      this.logger.error({ status: 401, packageName }, "google-play subscriptionsv2.get auth failed — cache invalidated");
+      this.logger.error({ status: 401, packageName, purchaseToken }, "google-play subscriptionsv2.get auth failed — cache invalidated");
       return null;
     }
     if (!res.ok) {
-      this.logger.warn({ status: res.status, packageName }, "google-play subscriptionsv2.get non-ok");
+      this.logger.warn({ status: res.status, packageName, purchaseToken }, "google-play subscriptionsv2.get non-ok");
       return null;
     }
     let body: unknown;
     try {
       body = await res.json();
     } catch (e) {
-      this.logger.warn({ err: (e as Error).message, packageName }, "google-play subscriptionsv2.get non-json body");
+      this.logger.warn({ err: (e as Error).message, packageName, purchaseToken }, "google-play subscriptionsv2.get non-json body");
       return null;
     }
     const v2 = body as { lineItems?: Array<{ expiryTime?: string }> };
     const expiryTime = v2.lineItems?.[0]?.expiryTime;
     if (typeof expiryTime !== "string" || !expiryTime) {
-      this.logger.warn({ packageName }, "google-play subscriptionsv2.get missing expiryTime");
+      this.logger.warn({ packageName, purchaseToken }, "google-play subscriptionsv2.get missing expiryTime");
       return null;
     }
     const d = new Date(expiryTime);
     if (isNaN(d.getTime())) {
-      this.logger.warn({ expiryTime, packageName }, "google-play subscriptionsv2.get unparseable expiryTime");
+      this.logger.warn({ expiryTime, packageName, purchaseToken }, "google-play subscriptionsv2.get unparseable expiryTime");
       return null;
     }
     return d;

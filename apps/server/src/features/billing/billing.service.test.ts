@@ -206,6 +206,23 @@ describe("real expiryTime override", () => {
     expect(end.getTime()).toBeLessThanOrEqual(expected + 5000);
   });
 
+  it("empty packageName + null fallback skips API call and uses 30-day default", async () => {
+    const linked: SubscriptionRow = { id: 23, userId: "u5", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: null, linkedAt: new Date() };
+    const apiClient = makeStubApiClient(new Date("2026-06-12T00:00:00Z"));
+    const { service, repo } = buildSut({ findSubscription: linked, apiClient });
+    // Build an envelope whose inner packageName is empty:
+    const innerNoPkg = { packageName: "", subscriptionNotification: { notificationType: 2, purchaseToken: "tok", version: "1.0" } };
+    const envNoPkg = { message: { messageId: "msg-no-pkg", publishTime: "2026-05-12T10:00:00Z", data: Buffer.from(JSON.stringify(innerNoPkg)).toString("base64") } };
+    const before = Date.now();
+    const r = await service.processGooglePlayEnvelope(envNoPkg);
+    expect(r.isOk()).toBe(true);
+    expect(apiClient.getSubscription).not.toHaveBeenCalled();
+    const end = repo.updateSubscriptionState.mock.calls[0]![2].currentPeriodEnd as Date;
+    const expected = before + 30 * 24 * 60 * 60 * 1000;
+    expect(end.getTime()).toBeGreaterThanOrEqual(expected);
+    expect(end.getTime()).toBeLessThanOrEqual(expected + 5000);
+  });
+
   it("non-grant events (CANCELED) do NOT call apiClient.getSubscription", async () => {
     const linked: SubscriptionRow = { id: 22, userId: "u4", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date("2026-12-01"), linkedAt: new Date() };
     const apiClient = makeStubApiClient(new Date("2026-06-12T00:00:00Z"));

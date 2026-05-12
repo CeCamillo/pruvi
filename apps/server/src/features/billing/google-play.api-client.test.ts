@@ -77,7 +77,7 @@ describe("GooglePlayApiClient", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
-  it("returns null on tokens endpoint 401 AND invalidates cached token", async () => {
+  it("returns null on v2 endpoint 401 AND invalidates cached token (next call re-mints)", async () => {
     fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
     fetchImpl.mockResolvedValueOnce(new Response("", { status: 401 }));
     const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });

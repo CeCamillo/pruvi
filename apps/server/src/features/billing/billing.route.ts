@@ -16,8 +16,6 @@ import { GooglePlayApiClient } from "./google-play.api-client";
 
 const repo = new BillingRepository();
 const ultra = new UltraService(new UltraRepository(db));
-const apiClient = new GooglePlayApiClient(loadServiceAccountFromEnv(env));
-const service = new BillingService(db, repo, ultra, apiClient, env.GOOGLE_PLAY_PACKAGE_NAME ?? null);
 
 // IMPORTANT: throw AppError subclasses so the project's error handler maps statusCode correctly.
 // Plain `throw new Error(...)` would fall through to the 500 branch regardless of reply.code().
@@ -54,6 +52,11 @@ async function appStorePathGuard(request: FastifyRequest) {
 }
 
 export const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
+  // Construct the api client inside the plugin closure so fastify.log (pino) is available
+  // — pino-structured logs are required for production observability per spec §4.1.
+  const apiClient = new GooglePlayApiClient(loadServiceAccountFromEnv(env), { logger: fastify.log });
+  const service = new BillingService(db, repo, ultra, apiClient, env.GOOGLE_PLAY_PACKAGE_NAME ?? null);
+
   fastify.post(
     "/webhooks/google-play",
     {
