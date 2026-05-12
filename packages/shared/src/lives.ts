@@ -7,6 +7,7 @@ export const LIVES_RESET_HOURS = 24;
 export const LivesResponseSchema = z.object({
   lives: z.number().int().min(0).max(MAX_LIVES),
   maxLives: z.literal(MAX_LIVES),
+  bonusLives: z.number().int().nonnegative(),
   resetsAt: z.coerce.date().nullable(),
   unlimited: z.boolean(),
 });
