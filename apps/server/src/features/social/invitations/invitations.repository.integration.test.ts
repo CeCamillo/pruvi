@@ -175,6 +175,46 @@ describe("InvitationsRepository (integration)", () => {
           .from(invitationAcceptance).where(eq(invitationAcceptance.inviterId, "inv-cap-1"));
         expect(audit[0]!.rt).toBe("xp");
       });
+
+      it("race-safe: two concurrent shield-pref accepts at shields=0 produce exactly one shield + one XP", async () => {
+        await insertUser("inv-race");
+        await insertUser("invi-race-A", { inviteCode: "racecodea1" });
+        await insertUser("invi-race-B", { inviteCode: "racecodeb2" });
+        // Inviter prefers shield, currently has 0 shields.
+        await db.update(user)
+          .set({ inviteRewardPreference: "shield", streakShieldsAvailable: 0 })
+          .where(eq(user.id, "inv-race"));
+
+        // Fire two concurrent accepts.
+        const [r1, r2] = await Promise.allSettled([
+          repo.acceptInvitation("inv-race", "invi-race-A"),
+          repo.acceptInvitation("inv-race", "invi-race-B"),
+        ]);
+
+        // Both should resolve (no exception thrown). The repo's transaction handles concurrency.
+        // One acceptance grants the shield; the other falls back to XP via the lt() predicate.
+        const successfuls = [r1, r2].filter((r) => r.status === "fulfilled").map((r) => (r as PromiseFulfilledResult<typeof r1 extends PromiseFulfilledResult<infer V> ? V : never>).value);
+        // Exactly 2 fulfilled (the race-safe predicate handles both; no DB-level conflict on this path).
+        expect(successfuls.length).toBe(2);
+
+        const shieldCount = successfuls.filter((s) => s.rewardType === "shield").length;
+        const xpCount = successfuls.filter((s) => s.rewardType === "xp").length;
+        expect(shieldCount).toBe(1);
+        expect(xpCount).toBe(1);
+
+        // Verify inviter state: exactly 1 shield (cap respected), exactly 100 XP (the fallback).
+        const inviter = await db.select({ xp: user.totalXp, shields: user.streakShieldsAvailable })
+          .from(user).where(eq(user.id, "inv-race"));
+        expect(inviter[0]!.shields).toBe(MAX_STREAK_SHIELDS);
+        expect(inviter[0]!.xp).toBe(100);
+
+        // Audit rows reflect actual delivered rewards.
+        const audit = await db.select({ rt: invitationAcceptance.rewardType })
+          .from(invitationAcceptance).where(eq(invitationAcceptance.inviterId, "inv-race"));
+        expect(audit.length).toBe(2);
+        const rts = audit.map((a) => a.rt).sort();
+        expect(rts).toEqual(["shield", "xp"]);
+      });
     });
 
     it("does not partially commit when friendship insert fails due to duplicate (atomicity)", async () => {

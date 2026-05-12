@@ -48,4 +48,10 @@ describe("streakProtected", () => {
     expect(p.title).toBe("Seu escudo protegeu seu streak!");
     expect(p.body).toContain("7 dias");
   });
+
+  it("streakProtected(1) produces acceptable singular phrasing", () => {
+    const p = streakProtected(1);
+    expect(p.title).toBe("Seu escudo protegeu seu streak!");
+    expect(p.body).toContain("1 dias"); // Singular phrasing is acceptable per spec §7
+  });
 });

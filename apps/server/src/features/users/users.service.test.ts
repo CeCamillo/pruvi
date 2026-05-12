@@ -16,11 +16,13 @@ function makeMockRepo() {
     updateProfile: vi.fn(),
     updateUsername: vi.fn(),
     deleteUser: vi.fn(),
+    updateInviteRewardPreference: vi.fn(),
   } as unknown as UsersRepository & {
     findById: ReturnType<typeof vi.fn>;
     updateProfile: ReturnType<typeof vi.fn>;
     updateUsername: ReturnType<typeof vi.fn>;
     deleteUser: ReturnType<typeof vi.fn>;
+    updateInviteRewardPreference: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -85,6 +87,27 @@ describe("UsersService", () => {
     it("re-throws unexpected DB errors", async () => {
       repo.updateUsername.mockRejectedValue(new Error("connection reset"));
       await expect(service.updateUsername(USER_ID, "test")).rejects.toThrow("connection reset");
+    });
+  });
+
+  describe("updateInviteRewardPreference", () => {
+    it("preference='shield' → returns ok({ preference: 'shield' })", async () => {
+      const repo = makeMockRepo();
+      (repo.updateInviteRewardPreference as ReturnType<typeof vi.fn>).mockResolvedValue({ preference: "shield" });
+      const service = new UsersService(repo);
+      const result = await service.updateInviteRewardPreference("u1", "shield");
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) expect(result.value).toEqual({ preference: "shield" });
+      expect(repo.updateInviteRewardPreference).toHaveBeenCalledWith("u1", "shield");
+    });
+
+    it("preference='xp' → returns ok({ preference: 'xp' })", async () => {
+      const repo = makeMockRepo();
+      (repo.updateInviteRewardPreference as ReturnType<typeof vi.fn>).mockResolvedValue({ preference: "xp" });
+      const service = new UsersService(repo);
+      const result = await service.updateInviteRewardPreference("u1", "xp");
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) expect(result.value).toEqual({ preference: "xp" });
     });
   });
 
