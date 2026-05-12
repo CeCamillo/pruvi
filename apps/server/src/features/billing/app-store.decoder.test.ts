@@ -1,8 +1,27 @@
+import "reflect-metadata";
 import { describe, it, expect } from "vitest";
+import { webcrypto } from "node:crypto";
+import {
+  X509CertificateGenerator,
+  BasicConstraintsExtension,
+  KeyUsagesExtension,
+  KeyUsageFlags,
+  cryptoProvider,
+} from "@peculiar/x509";
 import { decodeAppStoreNotification, DecoderError } from "./app-store.decoder";
+import {
+  NoOpJwsVerifier,
+  AppStoreJwsVerifier,
+} from "./app-store.jws-verifier";
+
+cryptoProvider.set(webcrypto as unknown as Crypto);
+
+// ---------------------------------------------------------------------------
+// Fixture helpers (used by existing unit tests via NoOpJwsVerifier)
+// ---------------------------------------------------------------------------
 
 function makeJws(payload: object): string {
-  // header.payload.signature — only the middle segment is used.
+  // header.payload.signature — only the middle segment is used by NoOpJwsVerifier.
   const header = Buffer.from(JSON.stringify({ alg: "ES256", x5c: ["fake"] })).toString("base64url");
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return `${header}.${body}.sig`;
@@ -38,10 +57,109 @@ function buildEnvelope(opts: {
   return { signedPayload: makeJws(outer) };
 }
 
+// ---------------------------------------------------------------------------
+// Integration helpers — real cert chain for the end-to-end test
+// ---------------------------------------------------------------------------
+
+type Chain = {
+  rootPem: string;
+  x5c: string[];
+  leafPrivateKey: CryptoKey;
+  validFrom: Date;
+  validTo: Date;
+};
+
+async function makeChain(): Promise<Chain> {
+  const subtle = webcrypto.subtle;
+  const algo = { name: "ECDSA", namedCurve: "P-256" } as const;
+  const sigAlg = { name: "ECDSA", hash: "SHA-256" } as const;
+  const now = new Date();
+  const validFrom = new Date(now.getTime() - 60_000);
+  const validTo = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+
+  const rootKeys = await subtle.generateKey(algo, true, ["sign", "verify"]);
+  const root = await X509CertificateGenerator.create({
+    serialNumber: "01",
+    issuer: "CN=Test Apple Root CA",
+    subject: "CN=Test Apple Root CA",
+    notBefore: validFrom,
+    notAfter: validTo,
+    signingAlgorithm: sigAlg,
+    publicKey: rootKeys.publicKey,
+    signingKey: rootKeys.privateKey,
+    extensions: [
+      new BasicConstraintsExtension(true, undefined, true),
+      new KeyUsagesExtension(KeyUsageFlags.keyCertSign | KeyUsageFlags.cRLSign, true),
+    ],
+  });
+
+  const interKeys = await subtle.generateKey(algo, true, ["sign", "verify"]);
+  const intermediate = await X509CertificateGenerator.create({
+    serialNumber: "02",
+    issuer: root.subject,
+    subject: "CN=Test Apple Intermediate CA",
+    notBefore: validFrom,
+    notAfter: validTo,
+    signingAlgorithm: sigAlg,
+    publicKey: interKeys.publicKey,
+    signingKey: rootKeys.privateKey,
+    extensions: [
+      new BasicConstraintsExtension(true, 0, true),
+      new KeyUsagesExtension(KeyUsageFlags.keyCertSign, true),
+    ],
+  });
+
+  const leafKeys = await subtle.generateKey(algo, true, ["sign", "verify"]);
+  const leaf = await X509CertificateGenerator.create({
+    serialNumber: "03",
+    issuer: intermediate.subject,
+    subject: "CN=Test Apple Leaf",
+    notBefore: validFrom,
+    notAfter: validTo,
+    signingAlgorithm: sigAlg,
+    publicKey: leafKeys.publicKey,
+    signingKey: interKeys.privateKey,
+    extensions: [
+      new BasicConstraintsExtension(false),
+      new KeyUsagesExtension(KeyUsageFlags.digitalSignature, true),
+    ],
+  });
+
+  const certToBase64 = (c: typeof root) => Buffer.from(c.rawData).toString("base64");
+
+  return {
+    rootPem: root.toString("pem"),
+    x5c: [certToBase64(leaf), certToBase64(intermediate), certToBase64(root)],
+    leafPrivateKey: leafKeys.privateKey,
+    validFrom,
+    validTo,
+  };
+}
+
+async function mintJws(payload: object, chain: Chain): Promise<string> {
+  const header = { alg: "ES256", x5c: chain.x5c };
+  const headerB64 = Buffer.from(JSON.stringify(header)).toString("base64url");
+  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signingInput = `${headerB64}.${payloadB64}`;
+  const sigRaw = await webcrypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    chain.leafPrivateKey,
+    new TextEncoder().encode(signingInput),
+  );
+  const sigB64 = Buffer.from(sigRaw).toString("base64url");
+  return `${headerB64}.${payloadB64}.${sigB64}`;
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe("decodeAppStoreNotification", () => {
+  const verifier = new NoOpJwsVerifier();
+
   it("decodes SUBSCRIBED:INITIAL_BUY → activate", () => {
     const env = buildEnvelope({ notificationType: "SUBSCRIBED", subtype: "INITIAL_BUY" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind).toBe("subscription");
     if (d.kind === "subscription") {
       expect(d.notificationType).toBe("SUBSCRIBED");
@@ -51,14 +169,14 @@ describe("decodeAppStoreNotification", () => {
 
   it("decodes SUBSCRIBED:RESUBSCRIBE → activate", () => {
     const env = buildEnvelope({ notificationType: "SUBSCRIBED", subtype: "RESUBSCRIBE" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("activate");
   });
 
   it("decodes DID_RENEW → activate with expiresDate", () => {
     const futureMs = Date.now() + 30 * 86400000;
     const env = buildEnvelope({ notificationType: "DID_RENEW", expiresDate: futureMs });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind).toBe("subscription");
     if (d.kind === "subscription" && d.mappedAction.kind === "activate") {
       expect(Math.abs(d.mappedAction.expiresDate.getTime() - futureMs)).toBeLessThan(1000);
@@ -67,100 +185,136 @@ describe("decodeAppStoreNotification", () => {
 
   it("decodes DID_FAIL_TO_RENEW:GRACE_PERIOD → in_grace", () => {
     const env = buildEnvelope({ notificationType: "DID_FAIL_TO_RENEW", subtype: "GRACE_PERIOD" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("in_grace");
   });
 
   it("decodes DID_FAIL_TO_RENEW (no subtype) → on_hold_keep_entitlement", () => {
     const env = buildEnvelope({ notificationType: "DID_FAIL_TO_RENEW" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("on_hold_keep_entitlement");
   });
 
   it("decodes EXPIRED → expire", () => {
     const env = buildEnvelope({ notificationType: "EXPIRED" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("expire");
   });
 
   it("decodes REFUND → revoke", () => {
     const env = buildEnvelope({ notificationType: "REFUND" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("revoke");
   });
 
   it("decodes REVOKE → revoke", () => {
     const env = buildEnvelope({ notificationType: "REVOKE" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("revoke");
   });
 
   it("decodes DID_CHANGE_RENEWAL_STATUS:AUTO_RENEW_DISABLED → cancel_keep_entitlement", () => {
     const env = buildEnvelope({ notificationType: "DID_CHANGE_RENEWAL_STATUS", subtype: "AUTO_RENEW_DISABLED" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("cancel_keep_entitlement");
   });
 
   it("decodes DID_CHANGE_RENEWAL_STATUS:AUTO_RENEW_ENABLED → noop", () => {
     const env = buildEnvelope({ notificationType: "DID_CHANGE_RENEWAL_STATUS", subtype: "AUTO_RENEW_ENABLED" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("noop");
   });
 
   it("decodes REFUND_REVERSED with future expiry → activate", () => {
     const future = Date.now() + 30 * 86400000;
     const env = buildEnvelope({ notificationType: "REFUND_REVERSED", expiresDate: future });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("activate");
   });
 
   it("REFUND_REVERSED with PAST expiry → downgrades to expire (past-expiry safety)", () => {
     const past = Date.now() - 86400000;
     const env = buildEnvelope({ notificationType: "REFUND_REVERSED", expiresDate: past });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("expire");
   });
 
   it("decodes ONE_TIME_CHARGE → noop", () => {
     const env = buildEnvelope({ notificationType: "ONE_TIME_CHARGE" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("noop");
   });
 
   it("decodes RENEWAL_EXTENDED → noop", () => {
     const env = buildEnvelope({ notificationType: "RENEWAL_EXTENDED" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("noop");
   });
 
   it("returns kind=test for TEST notification (no data object)", () => {
     const env = { signedPayload: makeJws({ notificationUUID: "uuid-test", notificationType: "TEST", version: "2.0" }) };
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind).toBe("test");
   });
 
   it("returns kind=unknown for unrecognized notificationType", () => {
     const env = buildEnvelope({ notificationType: "FUTURE_FANCY_TYPE" });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind).toBe("unknown");
     if (d.kind === "unknown") expect(d.notificationType).toBe("FUTURE_FANCY_TYPE");
   });
 
   it("returns kind=unknown when data.signedTransactionInfo is missing", () => {
     const env = buildEnvelope({ notificationType: "DID_CHANGE_RENEWAL_PREF", omitSignedTransaction: true });
-    const d = decodeAppStoreNotification(env);
+    const d = decodeAppStoreNotification(env, verifier);
     expect(d.kind).toBe("unknown");
   });
 
   it("throws on missing signedPayload", () => {
-    expect(() => decodeAppStoreNotification({})).toThrow(DecoderError);
+    expect(() => decodeAppStoreNotification({}, verifier)).toThrow(DecoderError);
   });
 
   it("throws on JWS that doesn't have 3 segments", () => {
-    expect(() => decodeAppStoreNotification({ signedPayload: "a.b" })).toThrow(DecoderError);
+    expect(() => decodeAppStoreNotification({ signedPayload: "a.b" }, verifier)).toThrow(DecoderError);
   });
 
   it("throws on invalid JSON in JWS payload", () => {
-    expect(() => decodeAppStoreNotification({ signedPayload: "header.!notvalidbase64json!.sig" })).toThrow(DecoderError);
+    expect(() =>
+      decodeAppStoreNotification({ signedPayload: "header.!notvalidbase64json!.sig" }, verifier),
+    ).toThrow(DecoderError);
+  });
+
+  // ---------------------------------------------------------------------------
+  // End-to-end integration test — real AppStoreJwsVerifier with a test chain
+  // ---------------------------------------------------------------------------
+
+  it("decodes a fully-signed envelope end-to-end via AppStoreJwsVerifier", async () => {
+    const chain = await makeChain();
+    const realVerifier = new AppStoreJwsVerifier({ rootCertPem: chain.rootPem });
+
+    const innerJws = await mintJws(
+      {
+        originalTransactionId: "txn-123",
+        productId: "ultra_monthly",
+        expiresDate: Date.now() + 86_400_000,
+        environment: "Sandbox",
+      },
+      chain,
+    );
+
+    const outerJws = await mintJws(
+      {
+        notificationUUID: "uuid-1",
+        notificationType: "DID_RENEW",
+        subtype: null,
+        data: { signedTransactionInfo: innerJws, environment: "Sandbox" },
+        version: "2.0",
+        signedDate: Date.now(),
+      },
+      chain,
+    );
+
+    const decoded = decodeAppStoreNotification({ signedPayload: outerJws }, realVerifier);
+    expect(decoded.kind).toBe("subscription");
   });
 });

@@ -9,6 +9,7 @@ import type { DecodedAppStoreEvent } from "./app-store.decoder";
 import { decodeAppStoreNotification } from "./app-store.decoder";
 import type { db as DbClient } from "@pruvi/db";
 import type { GooglePlayApiClient } from "./google-play.api-client";
+import type { IJwsVerifier } from "./app-store.jws-verifier";
 
 type Db = typeof DbClient;
 
@@ -32,6 +33,7 @@ export class BillingService {
     private ultra: UltraService,
     private apiClient: GooglePlayApiClient,
     private packageNameFallback: string | null,
+    private jwsVerifier: IJwsVerifier,
   ) {}
 
   /** Webhook entry point. Returns the response payload; always 200 on accepted shapes.
@@ -231,7 +233,7 @@ export class BillingService {
   async processAppStoreEnvelope(envelope: unknown): Promise<Result<{ notificationUUID: string; kind: string }, AppError>> {
     let decoded: DecodedAppStoreEvent;
     try {
-      decoded = decodeAppStoreNotification(envelope);
+      decoded = decodeAppStoreNotification(envelope, this.jwsVerifier);
     } catch (e) {
       return err(new AppError(`MALFORMED_ENVELOPE: ${(e as Error).message}`, 200, "MALFORMED_ENVELOPE"));
     }

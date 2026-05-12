@@ -1,4 +1,5 @@
 import { APP_STORE_NOTIFICATION_TYPES, type AppStoreNotificationType } from "@pruvi/shared";
+import type { IJwsVerifier } from "./app-store.jws-verifier";
 
 export type AppStoreMappedAction =
   | { kind: "activate"; expiresDate: Date }
@@ -39,25 +40,12 @@ export class DecoderError extends Error {
 
 type AppStoreEnvelope = { signedPayload?: unknown };
 
-function decodeJwsSegment(jws: string): unknown {
-  const parts = jws.split(".");
-  if (parts.length !== 3) throw new DecoderError("JWS must have exactly 3 segments");
-  try {
-    const decoded = Buffer.from(parts[1]!, "base64url").toString("utf-8");
-    return JSON.parse(decoded);
-  } catch (_e) {
-    throw new DecoderError("JWS middle segment is not valid base64url+JSON");
-  }
-}
-
-/** SECURITY: deferred — see spec §2 non-goals. v1 trusts the URL-path secret for auth.
- *  Real x5c certificate-chain verification is a hardening ticket. */
-export function decodeAppStoreNotification(raw: unknown): DecodedAppStoreEvent {
+export function decodeAppStoreNotification(raw: unknown, verifier: IJwsVerifier): DecodedAppStoreEvent {
   if (!raw || typeof raw !== "object") throw new DecoderError("Envelope is not an object");
   const env = raw as AppStoreEnvelope;
   if (typeof env.signedPayload !== "string") throw new DecoderError("Missing signedPayload");
 
-  const outer = decodeJwsSegment(env.signedPayload) as {
+  let outer: {
     notificationUUID?: string;
     notificationType?: string;
     subtype?: string;
@@ -68,6 +56,11 @@ export function decodeAppStoreNotification(raw: unknown): DecodedAppStoreEvent {
     version?: string;
     signedDate?: number;
   };
+  try {
+    outer = verifier.verify(env.signedPayload) as typeof outer;
+  } catch (e) {
+    throw new DecoderError(`JWS verification failed: ${(e as Error).message}`);
+  }
 
   const notificationUUID = outer.notificationUUID;
   if (!notificationUUID || typeof notificationUUID !== "string") {
@@ -97,12 +90,17 @@ export function decodeAppStoreNotification(raw: unknown): DecodedAppStoreEvent {
     };
   }
 
-  const inner = decodeJwsSegment(data.signedTransactionInfo) as {
+  let inner: {
     originalTransactionId?: string;
     productId?: string;
     expiresDate?: number;
     environment?: string;
   };
+  try {
+    inner = verifier.verify(data.signedTransactionInfo) as typeof inner;
+  } catch (e) {
+    throw new DecoderError(`inner JWS verification failed: ${(e as Error).message}`);
+  }
   const originalTransactionId = inner.originalTransactionId;
   const productId = inner.productId;
   if (!originalTransactionId || typeof originalTransactionId !== "string") {
