@@ -64,6 +64,13 @@
       "when": 1778547463046,
       "tag": "0008_known_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778584840941,
+      "tag": "0009_marvelous_johnny_blaze",
+      "breakpoints": true
     }
   ]
 }
