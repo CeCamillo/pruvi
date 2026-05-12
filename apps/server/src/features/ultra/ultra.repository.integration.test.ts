@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { sql } from "drizzle-orm";
 import {
   setupTestDb,
   cleanupTestDb,
@@ -62,6 +63,16 @@ describe("UltraRepository (integration)", () => {
       expect(result?.ultraExpiresAt).toBeInstanceOf(Date);
       expect(result?.ultraExpiresAt?.toISOString()).toBe(expiresAt.toISOString());
     });
+
+    it("re-granting overwrites the expiry (idempotent)", async () => {
+      await insertUser("user-grant-2");
+      const t1 = new Date("2027-01-01T00:00:00.000Z");
+      const t2 = new Date("2028-06-01T00:00:00.000Z");
+      await repo.grant("user-grant-2", t1);
+      await repo.grant("user-grant-2", t2);
+      const result = await repo.get("user-grant-2");
+      expect(result?.ultraExpiresAt?.toISOString()).toBe(t2.toISOString());
+    });
   });
 
   describe("revoke", () => {
@@ -91,8 +102,7 @@ describe("UltraRepository (integration)", () => {
       await expect(
         db.execute(
           // Use raw SQL to bypass Drizzle's type system — simulates a bad direct DB write
-          // @ts-ignore
-          `UPDATE "user" SET ultra_expires_at = '2027-01-01T00:00:00.000Z' WHERE id = 'user-chk-1'`,
+          sql`UPDATE "user" SET ultra_expires_at = '2027-01-01T00:00:00.000Z' WHERE id = 'user-chk-1'`,
         ),
       ).rejects.toThrow();
     });

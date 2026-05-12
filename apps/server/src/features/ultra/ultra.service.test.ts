@@ -63,6 +63,12 @@ describe("UltraService", () => {
       expect(r._unsafeUnwrap().isUltra).toBe(true);
       expect(r._unsafeUnwrap().expiresAt).toBe(FUTURE.toISOString());
     });
+
+    it("returns isUltra:false when is_ultra=true but expiry is past (defensive)", async () => {
+      repo.get.mockResolvedValue({ isUltra: true, ultraExpiresAt: PAST });
+      const r = await service.getStatus("u");
+      expect(r._unsafeUnwrap()).toEqual({ isUltra: false, expiresAt: PAST.toISOString() });
+    });
   });
 
   it("grant calls repo.grant with correct args", async () => {

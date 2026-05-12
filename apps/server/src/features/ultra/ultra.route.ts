@@ -45,7 +45,7 @@ export const ultraRoutes: FastifyPluginAsyncZod = async (fastify) => {
     async (request) => {
       const { userId } = request.params as { userId: string };
       const { expiresAt } = request.body as { expiresAt: string };
-      return successResponse(unwrapResult(await service.grant(userId, new Date(expiresAt))));
+      return unwrapResult(await service.grant(userId, new Date(expiresAt)));
     },
   );
 
