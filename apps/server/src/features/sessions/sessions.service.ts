@@ -170,16 +170,16 @@ export class SessionsService {
               const kind = `${r.value.currentStreak}-day-streak` as "7-day-streak" | "30-day-streak";
               this.dispatcher!
                 .sendAchievementNotification(userId, kind)
-                .catch((e) => console.error("streak achievement push failed", e));
+                .catch((e) => this.logger?.error?.({ err: e, userId, kind }, "streak achievement push failed"));
             }
           })
-          .catch((e) => console.error("streak read failed in achievement hook", e));
+          .catch((e) => this.logger?.error?.({ err: e, userId }, "streak read failed in achievement hook"));
       }
       for (const t of transitions) {
         if (t.to === "quase_mestre") {
           this.dispatcher
             .sendAchievementNotification(userId, "quase-mestre", { subtopicName: t.name })
-            .catch((e) => console.error("mastery achievement push failed", e));
+            .catch((e) => this.logger?.error?.({ err: e, userId, subtopicName: t.name }, "mastery achievement push failed"));
         }
       }
     }
