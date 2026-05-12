@@ -21,6 +21,8 @@ export const user = pgTable("user", {
     .default(sql`'{}'::text[]`),
   dailyStudyTimeMinutes: integer("daily_study_time_minutes"),
   onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
+  isUltra: boolean("is_ultra").notNull().default(false),
+  ultraExpiresAt: timestamp("ultra_expires_at"),
   username: text("username"),
   inviteCode: text("invite_code")
     .notNull()
