@@ -1,6 +1,6 @@
 # Phase 2E.3 — Simulado Semanal (Design Spec)
 
-**Status:** v2 (post Gate A self-review)
+**Status:** v3 (post Gate B plan review — resolves Ultra-lapse `/current` UX)
 **Date:** 2026-05-12
 **Branch:** `feature/phase-2e3-simulado-semanal`
 **Product source:** `pruvi-freatures.md` §5.2
@@ -32,8 +32,10 @@ Deliver a weekly mock exam ("simulado") to Ultra users: 35 questions, BRT-anchor
 ## 4. Entitlement
 
 - Gated by `UltraService.isUltra(userId)` (existing, Phase 2E.1 — note the method is named `isUltra`, not `isUltraActive`).
-- Non-Ultra requests return `403 ULTRA_REQUIRED` with the same envelope the lives feature uses for paywalls.
+- Non-Ultra requests return `403 ULTRA_REQUIRED` from `POST /simulados/start` unconditionally (no new simulado for non-Ultra).
+- `GET /simulados/current`, `GET /simulados/:id`, `POST /simulados/:id/answer`, `POST /simulados/:id/complete`, and `GET /simulados/:id/results` return `403 ULTRA_REQUIRED` ONLY when the user is non-Ultra AND has no existing simulado for the relevant week (`/current`) or the requested simulado is not theirs (`/:id` endpoints — these use 404 anyway). The mid-simulado escape hatch (spec A9) is preserved: a user whose Ultra lapsed while a simulado is in progress can still see it via `/current`, fetch its detail, answer remaining questions, and finalize it.
 - If Ultra lapses mid-simulado (`ultraExpiresAt` passes while a simulado is in progress), the user can still complete the simulado they started but cannot start a new one. **Rationale:** they paid for that simulado at start time; clawing it back creates support pain.
+- **Implementation rule:** `getCurrent` and `getDetail`/`recordAnswer`/`forceComplete`/`getResults` do NOT call `ultra.isUltra` unconditionally. Instead: `getCurrent` calls `ultra.isUltra` only after determining no simulado exists for the current week (so a lapsed user with an in-progress simulado still gets a 200 response). `getDetail`/`recordAnswer`/`forceComplete`/`getResults` rely on ownership (returning 404 if not owned) and do not check Ultra at all, because the simulado's existence is itself proof of past entitlement at start time.
 
 ## 5. Data model
 
@@ -184,7 +186,7 @@ SimuladoCurrentResponseSchema = z.object({
 });
 ```
 
-Non-Ultra: `403 ULTRA_REQUIRED`.
+Non-Ultra with NO simulado for the current week: `403 ULTRA_REQUIRED`. Non-Ultra with an existing simulado for the current week (Ultra-lapsed mid-simulado): `200` with that simulado's state. See §4 for the entitlement rule.
 
 ### 7.2 `POST /simulados/start`
 
@@ -319,7 +321,7 @@ No data backfill needed (greenfield tables).
 
 A1. Ultra-active user can `POST /simulados/start` during the current BRT Sunday-Sunday window and receive `min(SIMULADO_QUESTION_COUNT, total_bank_size)` distinct questions (35 in production; fewer in dev/seed environments where the bank is smaller, with `weekly_simulado.questions_count` reflecting the actual count).
 A2. The same Ultra user calling `/start` twice in the same week receives the same `simulado.id` and the same question set in the same order.
-A3. Non-Ultra user receives `403 ULTRA_REQUIRED` from `/start`, `/current`, `/:id`, `/:id/answer`, `/:id/complete`, `/:id/results`.
+A3. Non-Ultra user with NO simulado for the current week receives `403 ULTRA_REQUIRED` from `POST /simulados/start` and `GET /simulados/current`. Non-Ultra user who started a simulado while Ultra was active (now lapsed) gets a `200` from `/current` showing their in-progress simulado and can still call `/:id`, `/:id/answer`, `/:id/complete`, `/:id/results` for it. Non-owners of a simulado get `404` from the `/:id*` endpoints (not 403) to avoid leaking existence.
 A4. `POST /simulados/:id/answer` returns `{ isCorrect, correctOptionIndex, explanation }` based on the stored question and the submitted option.
 A5. Answering the same question twice on the same simulado returns the originally-recorded outcome; `correct_count` is incremented exactly once.
 A6. Answering the 35th unanswered question auto-completes the simulado (`completed_at` set, response `completed: true`).
