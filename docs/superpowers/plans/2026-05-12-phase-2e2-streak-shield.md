@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Ship streak shields: Ultra users accumulate up to 3 (one per 30 days, lazy refill). Auto-protect a 1-day gap on session-complete. New endpoint to view balance.
+**Goal:** Ship streak shields: Ultra users have at most 1 shield in stock (binary, no accumulation per spec v2 §5.3). Lazy single-grant refill 30 days after last grant. Auto-protect a 1-day gap on session-complete. New endpoint to view balance.
+
+> **Status note:** Tasks 1-2 already shipped (commits `2a24dba`, `82191c7`, `66adaed`, `7f7486c`). Shared constants (MAX_STREAK_SHIELDS = 1, ShieldUseResultSchema, todayInBrt) + migration `0008_known_lockjaw.sql` (with CHECK `<= 1`) + PGlite mirror are all in place. Implement Tasks 3-5 below.
 
 **Architecture:** New `shields/` feature module (repo + service + route). Atomic CTE in `tryUseShield` for race-free decrement + protection-row insert. Lazy refill computed in `materializeRefill`. `StreaksService` merges protected dates from `streak_shield_usage` into the completed-dates set. Fire-and-forget hook in `sessions.completeSession`.
 
@@ -295,40 +297,36 @@ export class ShieldsRepository {
     return { available: updated[0]!.available, lastGrantAt: updated[0]!.lastGrantAt, isUltraActive: true };
   }
 
-  /** Atomic decrement + insert. Returns success if both occurred. */
-  async tryUseShield(
-    userId: string,
-    protectedDate: string,
-  ): Promise<{ used: boolean; balanceAfter: number | null }> {
-    // Single CTE: decrement only if shields>0, insert only if no conflict.
-    const result = await this.db.execute<{ new_balance: number | null; usage_id: number | null }>(sql`
-      WITH decrement AS (
-        UPDATE "user"
-        SET streak_shields_available = streak_shields_available - 1
-        WHERE id = ${userId} AND streak_shields_available > 0
-        RETURNING streak_shields_available
-      ),
-      insertion AS (
-        INSERT INTO streak_shield_usage (user_id, protected_date)
-        VALUES (${userId}, ${protectedDate}::date)
-        ON CONFLICT (user_id, protected_date) DO NOTHING
-        RETURNING id
-      )
-      SELECT
-        (SELECT streak_shields_available FROM decrement) AS new_balance,
-        (SELECT id FROM insertion) AS usage_id
-    `);
-    const rows = Array.isArray(result) ? result : (result as { rows: Array<{ new_balance: number | null; usage_id: number | null }> }).rows;
-    const row = rows[0];
-    if (!row || row.new_balance === null || row.usage_id === null) {
-      // Either no shields OR already protected — rollback effect by reverting any successful side.
-      // But because both ran in a single statement, if usage_id is null and decrement happened, we must reverse it.
-      // PG executes CTE branches in arbitrary order; need to guard against partial application.
-      // SAFER APPROACH: explicit transaction with row-level locking.
-      // (See Task 3 step 1.5 below for an alternative if this edge surfaces.)
-      return { used: false, balanceAfter: null };
+  /**
+   * Atomic decrement + protection insert. Returns `{ used: true }` only when
+   * both succeed; UNIQUE conflict on (user_id, protected_date) rolls back
+   * the decrement via thrown error.
+   */
+  async tryUseShield(userId: string, protectedDate: string): Promise<ShieldUseResult> {
+    try {
+      return await this.db.transaction(async (tx) => {
+        // 1. Conditional decrement — only succeeds when shields > 0 (predicate inside row lock).
+        const dec = await tx
+          .update(user)
+          .set({ streakShieldsAvailable: sql`${user.streakShieldsAvailable} - 1` })
+          .where(and(eq(user.id, userId), gt(user.streakShieldsAvailable, 0)))
+          .returning({ available: user.streakShieldsAvailable });
+        if (dec.length === 0) return { used: false, balanceAfter: null };
+
+        // 2. Insert protection row. UNIQUE conflict → throw to roll back the decrement.
+        try {
+          await tx.insert(streakShieldUsage).values({ userId, protectedDate });
+        } catch (e) {
+          throw new Error("ALREADY_PROTECTED");
+        }
+        return { used: true, balanceAfter: dec[0]!.available };
+      });
+    } catch (e) {
+      if (e instanceof Error && e.message === "ALREADY_PROTECTED") {
+        return { used: false, balanceAfter: null };
+      }
+      throw e;
     }
-    return { used: true, balanceAfter: row.new_balance };
   }
 
   async listProtectedDates(userId: string): Promise<string[]> {
@@ -341,43 +339,14 @@ export class ShieldsRepository {
 }
 ```
 
-**Important caveat on `tryUseShield`:** in standard SQL, the two CTE branches (`decrement`, `insertion`) run independently and may both succeed or both fail. Postgres specifically defines that data modifications in CTEs use the same snapshot, but they execute in parallel; you cannot make one conditional on the other within a single CTE without manual transaction wrapping.
-
-**Use a transaction instead** for guaranteed correctness:
-
-```typescript
-async tryUseShield(userId: string, protectedDate: string): Promise<{ used: boolean; balanceAfter: number | null }> {
-  return this.db.transaction(async (tx) => {
-    // Try to decrement first. If 0 rows, no shields.
-    const dec = await tx
-      .update(user)
-      .set({ streakShieldsAvailable: sql`${user.streakShieldsAvailable} - 1` })
-      .where(and(eq(user.id, userId), gt(user.streakShieldsAvailable, 0)))
-      .returning({ available: user.streakShieldsAvailable });
-    if (dec.length === 0) return { used: false, balanceAfter: null };
-    // Try to insert protection. UNIQUE conflict → rollback decrement.
-    try {
-      await tx.insert(streakShieldUsage).values({ userId, protectedDate });
-    } catch (e) {
-      // Rollback by throwing — transaction handler unwinds.
-      throw new Error("ALREADY_PROTECTED");
-    }
-    return { used: true, balanceAfter: dec[0]!.available };
-  }).catch((e) => {
-    if (e?.message === "ALREADY_PROTECTED") return { used: false, balanceAfter: null };
-    throw e;
-  });
-}
-```
-
-Use this transaction version, not the CTE. The CTE design was a planning exploration that doesn't actually provide atomicity-without-transactions.
+Note: import `ShieldUseResult` from `@pruvi/shared`. Imports needed at the top: `eq, sql, and, gt, isNull, lt` from `drizzle-orm`.
 
 - [ ] **Step 2: Service**
 
 ```typescript
 import { ok, type Result } from "neverthrow";
 import { AppError } from "../../utils/errors";
-import { MAX_STREAK_SHIELDS, SHIELD_REFILL_INTERVAL_MS } from "@pruvi/shared";
+import { MAX_STREAK_SHIELDS, SHIELD_REFILL_INTERVAL_MS, type ShieldUseResult } from "@pruvi/shared";
 import type { ShieldsRepository } from "./shields.repository";
 
 export class ShieldsService {
@@ -401,7 +370,7 @@ export class ShieldsService {
     });
   }
 
-  async tryUseShield(userId: string, protectedDate: string): Promise<{ used: boolean; balanceAfter: number | null }> {
+  async tryUseShield(userId: string, protectedDate: string): Promise<ShieldUseResult> {
     // Materialize refill first so eligible Ultra users have access to a freshly-granted shield.
     await this.repo.materializeRefill(userId, new Date());
     return this.repo.tryUseShield(userId, protectedDate);
@@ -496,6 +465,7 @@ const [completedDates, protectedDates] = await Promise.all([
   this.shieldsRepo?.listProtectedDates(userId) ?? Promise.resolve([] as string[]),
 ]);
 
+// Both arrays contain `YYYY-MM-DD` BRT-local strings — Set dedup is safe.
 const allDates = Array.from(new Set([...completedDates, ...protectedDates])).sort().reverse();
 if (allDates.length === 0) {
   return ok({ currentStreak: 0, longestStreak: 0, totalSessions: 0 });
@@ -553,30 +523,50 @@ if (this.shieldsService) {
 (Add `private logger?: FastifyBaseLogger` to constructor if it doesn't already exist — match the reviews.service pattern from 2D.1.)
 
 ```typescript
+import { todayInBrt } from "@pruvi/shared";
+
 private async maybeProtectMissedDay(userId: string): Promise<void> {
-  const dates = await this.repo.getRecentCompletedSessionDates(userId, 2);
+  // Use BRT-local date math — UTC would mis-fire near midnight for users.
+  const now = new Date();
+  const todayStr = todayInBrt(now);
+  const yesterdayStr = todayInBrt(new Date(now.getTime() - 86_400_000));
+  const dates = await this.streaksService!.getRecentCompletedDates(userId, 2);
   if (dates.length < 2) return;
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().slice(0, 10);
   if (dates[0] !== todayStr) return;
-  const prev = new Date(dates[1] + "T00:00:00Z");
-  const diffDays = Math.round((today.getTime() - prev.getTime()) / 86_400_000);
+  // Both dates are YYYY-MM-DD BRT strings — convert to date-aware Date at midnight BRT (UTC 03:00).
+  const todayDate = new Date(todayStr + "T03:00:00Z");
+  const prevDate = new Date(dates[1] + "T03:00:00Z");
+  const diffDays = Math.round((todayDate.getTime() - prevDate.getTime()) / 86_400_000);
   if (diffDays !== 2) return;
-  const yesterday = new Date(today.getTime() - 86_400_000);
-  await this.shieldsService!.tryUseShield(userId, yesterday.toISOString().slice(0, 10));
+  await this.shieldsService!.tryUseShield(userId, yesterdayStr);
 }
 ```
 
-**`SessionsRepository.getRecentCompletedSessionDates` helper** — add this method. It returns up to N most recent completed session dates (descending). It's a thin wrapper for the hook; existing `getCompletedSessionDates` on `StreaksRepository` returns the full list which is unnecessary here. (You may instead reuse the existing method and slice to 2 — verify the existing query is indexed efficiently.)
+**Sub-step (CRITICAL): verify `getCompletedSessionDates` returns DISTINCT BRT dates.**
 
-Decision: reuse the existing `streaks.repository.getCompletedSessionDates(userId)` and slice the first 2 in the service. This avoids a new repo method. The query is already indexed on `(user_id, created_at)`.
+Before wiring the hook, open `streaks.repository.ts` and inspect the SQL of `getCompletedSessionDates`. The query MUST return one row per distinct BRT calendar day (not per session). Without DISTINCT, two same-day sessions yield `dates = ['today', 'today']`, making `(today - dates[1]).days === 0` and breaking the gap math.
 
-To do this cleanly, the sessions service needs the streaks repo. Look at the existing constructor — streaks service is already injected. The streaks service exposes the data via `getStreaks`, but we want raw dates. Simplest: add a small `streaks.service.getCompletedDates(userId)` method that returns `string[]`, exposing the repo data.
+- If the current query uses `created_at::date` without a timezone conversion or without DISTINCT: fix it to use `(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date` AND wrap with `DISTINCT` or `GROUP BY`.
+- If already correct, leave it.
+
+**`StreaksService.getRecentCompletedDates(userId, limit)` helper** — add this method. It exposes the streaks repo's date list to the sessions hook without duplicating the query. Match the existing repo signature; slice to `limit` in the service.
+
+```typescript
+// streaks.service.ts
+async getRecentCompletedDates(userId: string, limit: number): Promise<string[]> {
+  const dates = await this.repo.getCompletedSessionDates(userId);
+  return dates.slice(0, limit);
+}
+```
+
+The sessions service already has `streaksService` injected, so no new wiring is needed beyond this method.
 
 - [ ] **Step 3: Wire in `sessions.route.ts`**
 
-Where `new SessionsService(...)` is constructed (likely in the route plugin function), pass `new ShieldsService(new ShieldsRepository(db))` as the new arg.
+Open `sessions.route.ts`. The `new SessionsService(...)` instantiation MUST be inside the `async (fastify) => { ... }` plugin function body — NOT at module level. This is the established pattern from the 2D.1 reviews-route fix (commit `60564c0`); module-level construction triggers DB connections at boot and can't access `fastify.*`.
+
+- If `new SessionsService(...)` is already inside the plugin function, just append `new ShieldsService(new ShieldsRepository(db))` as the new constructor arg.
+- If it's at module level, FIRST move all related construction inside the plugin function (match `reviews.route.ts` structure), THEN add the shields arg.
 
 - [ ] **Step 4: Tests**
 
