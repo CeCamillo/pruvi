@@ -36,6 +36,7 @@ describe("LivesRepository (integration)", () => {
       expect(r.ok).toBe(true);
       if (!r.ok) throw new Error("unreachable");
       expect(r.livesAfter).toBe(4);
+      expect(r.isUltra).toBe(false);
       // The pg driver serializes JS Dates using local timezone when writing, and reads
       // timestamp columns as local time, so the round-trip shifts by the local TZ offset.
       // Verify the anchor was set (not null) and matches what the DB actually persisted.
@@ -55,6 +56,7 @@ describe("LivesRepository (integration)", () => {
       expect(r.ok).toBe(true);
       if (!r.ok) throw new Error("unreachable");
       expect(r.livesAfter).toBe(3);
+      expect(r.isUltra).toBe(false);
       // COALESCE kept the previously-persisted anchor: returned value matches DB round-trip, not `now`.
       const persisted = await repo.getUserLives(userId);
       expect(r.lastRegenAt!.getTime()).toBe(persisted!.livesLastRegenAt!.getTime());
@@ -71,12 +73,33 @@ describe("LivesRepository (integration)", () => {
       const after = (await repo.getUserLives(userId))!;
       expect(after.lives).toBe(0);
     });
+
+    it("Ultra user with active subscription: returns ok:true, livesAfter=MAX, isUltra=true without DB write", async () => {
+      const expiresAt = new Date("2099-01-01T00:00:00Z");
+      await db
+        .update(user)
+        .set({ lives: 3, isUltra: true, ultraExpiresAt: expiresAt })
+        .where(eq(user.id, userId));
+
+      const now = new Date("2026-05-11T10:00:00Z");
+      const r = await repo.tryDecrement(userId, now);
+
+      expect(r.ok).toBe(true);
+      if (!r.ok) throw new Error("unreachable");
+      expect(r.livesAfter).toBe(MAX_LIVES);
+      expect(r.lastRegenAt).toBeNull();
+      expect(r.isUltra).toBe(true);
+
+      // DB lives column must be unchanged
+      const after = (await repo.getUserLives(userId))!;
+      expect(after.lives).toBe(3);
+    });
   });
 
   describe("materializeRegen", () => {
     it("no-op when lives at MAX (anchor null)", async () => {
       const r = await repo.materializeRegen(userId, new Date());
-      expect(r).toEqual({ lives: MAX_LIVES, lastRegenAt: null });
+      expect(r).toEqual({ lives: MAX_LIVES, lastRegenAt: null, isUltra: false });
     });
 
     it("regens +2 after 8h elapsed from anchor", async () => {
@@ -89,6 +112,7 @@ describe("LivesRepository (integration)", () => {
       const r = await repo.materializeRegen(userId, now);
       expect(r.lives).toBe(4);
       expect(r.lastRegenAt).toEqual(new Date(anchor.getTime() + 2 * LIVES_REGEN_INTERVAL_MS));
+      expect(r.isUltra).toBe(false);
     });
 
     it("caps at MAX and nulls anchor", async () => {
@@ -99,7 +123,38 @@ describe("LivesRepository (integration)", () => {
         .where(eq(user.id, userId));
       const now = new Date("2026-05-11T10:00:00Z"); // > 24h, enough to fill to MAX
       const r = await repo.materializeRegen(userId, now);
-      expect(r).toEqual({ lives: MAX_LIVES, lastRegenAt: null });
+      expect(r).toEqual({ lives: MAX_LIVES, lastRegenAt: null, isUltra: false });
+    });
+
+    it("Ultra user with active subscription: returns MAX_LIVES, lastRegenAt null, isUltra true regardless of stored lives", async () => {
+      const expiresAt = new Date("2099-01-01T00:00:00Z");
+      await db
+        .update(user)
+        .set({ lives: 2, isUltra: true, ultraExpiresAt: expiresAt })
+        .where(eq(user.id, userId));
+
+      const now = new Date("2026-05-11T10:00:00Z");
+      const r = await repo.materializeRegen(userId, now);
+
+      expect(r.lives).toBe(MAX_LIVES);
+      expect(r.lastRegenAt).toBeNull();
+      expect(r.isUltra).toBe(true);
+    });
+
+    it("expired Ultra user: applies normal regen logic (Ultra short-circuit does not fire)", async () => {
+      const expiredAt = new Date("2025-01-01T00:00:00Z"); // in the past
+      const anchor = new Date("2026-05-11T02:00:00Z");
+      await db
+        .update(user)
+        .set({ lives: 2, livesLastRegenAt: anchor, isUltra: true, ultraExpiresAt: expiredAt })
+        .where(eq(user.id, userId));
+
+      const now = new Date("2026-05-11T10:00:00Z"); // +8h = 2 ticks
+      const r = await repo.materializeRegen(userId, now);
+
+      // Normal regen applies: 2 + 2 = 4
+      expect(r.lives).toBe(4);
+      expect(r.isUltra).toBe(false);
     });
   });
 });
