@@ -255,11 +255,14 @@ export class ShieldsRepository {
     return rows[0] ?? null;
   }
 
-  /** Apply lazy refill if eligible. Returns post-state. */
+  /**
+   * Apply lazy refill if eligible. Single-grant model (MAX=1, per spec v2): an
+   * Ultra-active user with 0 shields and either a NULL anchor or anchor >= 30d
+   * old gets exactly 1 shield. Race-safe via conditional UPDATE.
+   */
   async materializeRefill(
     userId: string,
     now: Date,
-    intervalMs: number,
   ): Promise<{ available: number; lastGrantAt: Date | null; isUltraActive: boolean }> {
     const current = await this.getUserShieldState(userId);
     if (!current) return { available: 0, lastGrantAt: null, isUltraActive: false };
@@ -267,31 +270,29 @@ export class ShieldsRepository {
     if (!ultraActive) {
       return { available: current.streakShieldsAvailable, lastGrantAt: current.lastShieldGrantAt, isUltraActive: false };
     }
-    let available = current.streakShieldsAvailable;
-    let lastGrant = current.lastShieldGrantAt;
-    if (available >= MAX_STREAK_SHIELDS) {
-      return { available, lastGrantAt: lastGrant, isUltraActive: true };
+    if (current.streakShieldsAvailable >= MAX_STREAK_SHIELDS) {
+      return { available: current.streakShieldsAvailable, lastGrantAt: current.lastShieldGrantAt, isUltraActive: true };
     }
-    let ticks = 0;
-    if (lastGrant === null) {
-      ticks = 1;
-      lastGrant = now;
-    } else {
-      const elapsed = now.getTime() - lastGrant.getTime();
-      ticks = Math.max(0, Math.floor(elapsed / intervalMs));
-      if (ticks > 0) {
-        lastGrant = new Date(lastGrant.getTime() + ticks * intervalMs);
-      }
+    const eligible = current.lastShieldGrantAt === null
+      || now.getTime() - current.lastShieldGrantAt.getTime() >= SHIELD_REFILL_INTERVAL_MS;
+    if (!eligible) {
+      return { available: current.streakShieldsAvailable, lastGrantAt: current.lastShieldGrantAt, isUltraActive: true };
     }
-    if (ticks === 0) {
-      return { available, lastGrantAt: current.lastShieldGrantAt, isUltraActive: true };
-    }
-    const newAvailable = Math.min(MAX_STREAK_SHIELDS, available + ticks);
-    await this.db
+    // Race-safe conditional UPDATE: WHERE predicate re-evaluates inside row-level lock.
+    const whereConditions = current.lastShieldGrantAt === null
+      ? and(eq(user.id, userId), eq(user.streakShieldsAvailable, 0), isNull(user.lastShieldGrantAt))
+      : and(eq(user.id, userId), eq(user.streakShieldsAvailable, 0), lt(user.lastShieldGrantAt, new Date(now.getTime() - SHIELD_REFILL_INTERVAL_MS)));
+    const updated = await this.db
       .update(user)
-      .set({ streakShieldsAvailable: newAvailable, lastShieldGrantAt: lastGrant })
-      .where(eq(user.id, userId));
-    return { available: newAvailable, lastGrantAt: lastGrant, isUltraActive: true };
+      .set({ streakShieldsAvailable: 1, lastShieldGrantAt: now })
+      .where(whereConditions)
+      .returning({ available: user.streakShieldsAvailable, lastGrantAt: user.lastShieldGrantAt });
+    if (updated.length === 0) {
+      // Concurrent grant won. Re-read.
+      const fresh = await this.getUserShieldState(userId);
+      return { available: fresh?.streakShieldsAvailable ?? 0, lastGrantAt: fresh?.lastShieldGrantAt ?? null, isUltraActive: true };
+    }
+    return { available: updated[0]!.available, lastGrantAt: updated[0]!.lastGrantAt, isUltraActive: true };
   }
 
   /** Atomic decrement + insert. Returns success if both occurred. */
@@ -384,12 +385,13 @@ export class ShieldsService {
 
   async getBalance(userId: string): Promise<Result<{ available: number; maxAvailable: number; nextRefillAt: string | null }, AppError>> {
     const now = new Date();
-    const state = await this.repo.materializeRefill(userId, now, SHIELD_REFILL_INTERVAL_MS);
+    const state = await this.repo.materializeRefill(userId, now);
     let nextRefillAt: Date | null = null;
     if (state.isUltraActive && state.available < MAX_STREAK_SHIELDS && state.lastGrantAt) {
       nextRefillAt = new Date(state.lastGrantAt.getTime() + SHIELD_REFILL_INTERVAL_MS);
     } else if (state.isUltraActive && state.available < MAX_STREAK_SHIELDS && !state.lastGrantAt) {
-      // Edge: Ultra user who somehow has no last_shield_grant_at — eligible immediately.
+      // Edge: Ultra user with NULL last_shield_grant_at but materializeRefill didn't grant
+      // (concurrent grant lost the race). nextRefillAt = now is the truthful answer.
       nextRefillAt = now;
     }
     return ok({
@@ -401,7 +403,7 @@ export class ShieldsService {
 
   async tryUseShield(userId: string, protectedDate: string): Promise<{ used: boolean; balanceAfter: number | null }> {
     // Materialize refill first so eligible Ultra users have access to a freshly-granted shield.
-    await this.repo.materializeRefill(userId, new Date(), SHIELD_REFILL_INTERVAL_MS);
+    await this.repo.materializeRefill(userId, new Date());
     return this.repo.tryUseShield(userId, protectedDate);
   }
 }
@@ -441,26 +443,29 @@ Register `shieldsRoutes` alongside `ultraRoutes`/`rankingRoutes`/etc.
 
 - [ ] **Step 5: Unit tests `shields.service.test.ts`**
 
-Cover:
+Cover (MAX = 1, single-grant semantics):
 - Non-Ultra user: balance returns `{ available: 0, nextRefillAt: null }`.
-- Ultra user, no prior grant: refill applies; `available = 1`; `nextRefillAt = now + 30d`.
-- Ultra user, 60 days since last grant, 0 shields: refill applies 2 ticks; `available = 2`.
-- Ultra user, 100 days since last grant, 1 shield: cap at MAX (3), `available = 3`, `nextRefillAt = null` (at cap).
-- Ultra user, 5 days since last grant, 1 shield: no refill (interval not elapsed); `available = 1`.
+- Ultra user, NULL `lastShieldGrantAt`: refill grants 1; response has `available: 1`, `nextRefillAt: null` (at cap).
+- Ultra user with 0 shields, last grant 31d ago: refill grants 1; `available: 1`, `nextRefillAt: null` (at cap).
+- Ultra user with 0 shields, last grant 5d ago: NO refill; `available: 0`, `nextRefillAt = lastGrant + 30d`.
+- Ultra user already at 1 shield (regardless of last grant age): no refill; `available: 1`, `nextRefillAt: null`.
 - `tryUseShield` happy path: returns `{ used: true, balanceAfter: 0 }`.
 - `tryUseShield` no shields: returns `{ used: false, balanceAfter: null }`.
 - `tryUseShield` already-protected: returns `{ used: false, balanceAfter: null }`.
 
 - [ ] **Step 6: Integration tests `shields.repository.integration.test.ts`**
 
-Cover:
+Cover (MAX = 1, single-grant semantics):
 - `tryUseShield` with shields=1: decrement to 0, insert usage row, return `{ used: true, balanceAfter: 0 }`.
 - `tryUseShield` with shields=0: returns `{ used: false, balanceAfter: null }`. No usage row inserted.
-- `tryUseShield` for already-protected date: returns `{ used: false, balanceAfter: null }`. Shields count NOT decremented (transaction rolled back).
-- CHECK constraint: direct UPDATE attempting `streak_shields_available = -1` rejected. `streak_shields_available = 4` rejected.
-- `materializeRefill` for Ultra user with NULL last_grant: applies 1 tick, sets last_grant_at = now.
-- `materializeRefill` for Ultra user with stale (90 days ago) last_grant: applies 3 ticks (capped at MAX), advances last_grant_at by 3 * interval.
-- `listProtectedDates` returns sorted ISO date strings.
+- `tryUseShield` for already-protected date: returns `{ used: false, balanceAfter: null }`. Shields count NOT decremented (verify with follow-up SELECT — transaction rolled back).
+- CHECK constraint: direct UPDATE attempting `streak_shields_available = -1` rejected. `streak_shields_available = 2` rejected.
+- `materializeRefill` for Ultra user with NULL last_grant: grants 1 shield, sets last_grant_at = now.
+- `materializeRefill` for Ultra user with stale (40 days ago) last_grant and 0 shields: grants 1 shield, sets last_grant_at = now.
+- `materializeRefill` for Ultra user with 1 shield already (regardless of stale grant): NO-op.
+- `materializeRefill` for non-Ultra user: NO-op.
+- `materializeRefill` for Ultra user with 5d-old grant and 0 shields: NO-op (interval not elapsed).
+- `listProtectedDates` returns ISO date strings.
 
 - [ ] **Step 7: Run + commit**
 
