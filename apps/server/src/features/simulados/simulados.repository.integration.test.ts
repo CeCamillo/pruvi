@@ -247,4 +247,55 @@ describe("SimuladosRepository (integration)", () => {
       expect(res.kind).toBe("not_found");
     });
   });
+
+  describe("listPriorCompletedSimulados", () => {
+    it("returns up to N most recent COMPLETED prior simulados, oldest first, with per-subject breakdown", async () => {
+      await insertUser("u-hist-1");
+      // Seed 20 questions across 2 subjects (FK prereqs handled inside seedQuestions)
+      await seedQuestions(20, 2);
+      const weeks = ["2026-04-05", "2026-04-12", "2026-04-19", "2026-04-26", "2026-05-03", "2026-05-10"];
+      for (const w of weeks) {
+        const { simulado, questions } = await repo.startOrGetSimulado("u-hist-1", w, 10);
+        // Answer all correctly so each is completed
+        for (const q of questions) {
+          await repo.recordAnswer(simulado.id, "u-hist-1", q.questionId, q.correctOptionIndex);
+        }
+      }
+      // current week is 2026-05-10 → prior = 5 most recent before it; we ask for 4
+      const history = await repo.listPriorCompletedSimulados("u-hist-1", "2026-05-10", 4);
+      expect(history.map((h) => h.weekStart)).toEqual(["2026-04-12", "2026-04-19", "2026-04-26", "2026-05-03"]);
+      // Per-subject breakdown sums to total
+      for (const h of history) {
+        const sum = h.perSubject.reduce((s, p) => s + p.total, 0);
+        expect(sum).toBe(h.total);
+      }
+    });
+
+    it("excludes IN-PROGRESS simulados", async () => {
+      await insertUser("u-hist-2");
+      await seedQuestions(5, 1);
+      const { simulado: prior, questions: pq } = await repo.startOrGetSimulado("u-hist-2", "2026-05-03", 5);
+      for (const q of pq) await repo.recordAnswer(prior.id, "u-hist-2", q.questionId, q.correctOptionIndex);
+      // Current week — started but not completed
+      await repo.startOrGetSimulado("u-hist-2", "2026-05-10", 5);
+      const history = await repo.listPriorCompletedSimulados("u-hist-2", "2026-05-10", 4);
+      expect(history.length).toBe(1);
+      expect(history[0]!.weekStart).toBe("2026-05-03");
+    });
+
+    it("getResultsAggregate returns per-subject breakdown for one simulado", async () => {
+      await insertUser("u-agg-1");
+      await seedQuestions(6, 2); // 3 questions for each of 2 subjects
+      const { simulado, questions } = await repo.startOrGetSimulado("u-agg-1", "2026-05-10", 6);
+      // Answer first 4 correctly, last 2 wrong
+      for (let i = 0; i < 4; i++) await repo.recordAnswer(simulado.id, "u-agg-1", questions[i]!.questionId, questions[i]!.correctOptionIndex);
+      for (let i = 4; i < 6; i++) await repo.recordAnswer(simulado.id, "u-agg-1", questions[i]!.questionId, (questions[i]!.correctOptionIndex + 1) % 4);
+      const agg = await repo.getResultsAggregate(simulado.id);
+      expect(agg.correct).toBe(4);
+      expect(agg.total).toBe(6);
+      const ps = agg.perSubject.sort((a, b) => a.subjectId - b.subjectId);
+      expect(ps).toHaveLength(2);
+      expect(ps.reduce((s, p) => s + p.total, 0)).toBe(6);
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import type { db as DbClient } from "@pruvi/db";
 import { question } from "@pruvi/db/schema/questions";
 import { weeklySimulado, weeklySimuladoQuestion } from "@pruvi/db/schema/weekly-simulado";
@@ -303,6 +303,103 @@ export class SimuladosRepository {
     if (!row) return null;
     const questions = await this.fetchQuestionsForSimulado(row.id);
     return { simulado: this.toSimuladoRow(row), questions };
+  }
+
+  /**
+   * Returns up to `limit` most recent COMPLETED simulados strictly BEFORE
+   * `currentWeekStart`, ordered oldest first, with per-subject breakdown.
+   */
+  async listPriorCompletedSimulados(
+    userId: string,
+    currentWeekStart: string,
+    limit: number,
+  ): Promise<
+    Array<{
+      weekStart: string;
+      correct: number;
+      total: number;
+      perSubject: Array<{ subjectId: number; correct: number; total: number }>;
+    }>
+  > {
+    const recent = await this.db
+      .select({
+        id: weeklySimulado.id,
+        weekStartDate: weeklySimulado.weekStartDate,
+        correctCount: weeklySimulado.correctCount,
+        questionsCount: weeklySimulado.questionsCount,
+      })
+      .from(weeklySimulado)
+      .where(
+        and(
+          eq(weeklySimulado.userId, userId),
+          isNotNull(weeklySimulado.completedAt),
+          lt(weeklySimulado.weekStartDate, currentWeekStart),
+        ),
+      )
+      .orderBy(desc(weeklySimulado.weekStartDate))
+      .limit(limit);
+    if (recent.length === 0) return [];
+
+    const ids = recent.map((r) => r.id);
+    const perSubjectRows = await this.db
+      .select({
+        simuladoId: weeklySimuladoQuestion.simuladoId,
+        subjectId: question.subjectId,
+        correct: sql<number>`SUM(CASE WHEN ${weeklySimuladoQuestion.isCorrect} = true THEN 1 ELSE 0 END)`,
+        total: count(),
+      })
+      .from(weeklySimuladoQuestion)
+      .innerJoin(question, eq(weeklySimuladoQuestion.questionId, question.id))
+      .where(inArray(weeklySimuladoQuestion.simuladoId, ids))
+      .groupBy(weeklySimuladoQuestion.simuladoId, question.subjectId);
+
+    const bySimulado = new Map<number, Array<{ subjectId: number; correct: number; total: number }>>();
+    for (const r of perSubjectRows) {
+      const list = bySimulado.get(r.simuladoId) ?? [];
+      list.push({ subjectId: r.subjectId, correct: Number(r.correct), total: Number(r.total) });
+      bySimulado.set(r.simuladoId, list);
+    }
+
+    return recent
+      .map((r) => ({
+        weekStart: typeof r.weekStartDate === "string" ? r.weekStartDate : new Date(r.weekStartDate).toISOString().slice(0, 10),
+        correct: r.correctCount,
+        total: r.questionsCount,
+        perSubject: bySimulado.get(r.id) ?? [],
+      }))
+      .reverse(); // oldest first
+  }
+
+  /** Per-subject aggregate for a single simulado. */
+  async getResultsAggregate(simuladoId: number): Promise<{
+    correct: number;
+    total: number;
+    perSubject: Array<{ subjectId: number; correct: number; total: number }>;
+  }> {
+    const head = await this.db
+      .select({ correctCount: weeklySimulado.correctCount, questionsCount: weeklySimulado.questionsCount })
+      .from(weeklySimulado)
+      .where(eq(weeklySimulado.id, simuladoId))
+      .limit(1);
+    const h = head[0];
+    if (!h) return { correct: 0, total: 0, perSubject: [] };
+
+    const perSubject = await this.db
+      .select({
+        subjectId: question.subjectId,
+        correct: sql<number>`SUM(CASE WHEN ${weeklySimuladoQuestion.isCorrect} = true THEN 1 ELSE 0 END)`,
+        total: count(),
+      })
+      .from(weeklySimuladoQuestion)
+      .innerJoin(question, eq(weeklySimuladoQuestion.questionId, question.id))
+      .where(eq(weeklySimuladoQuestion.simuladoId, simuladoId))
+      .groupBy(question.subjectId);
+
+    return {
+      correct: h.correctCount,
+      total: h.questionsCount,
+      perSubject: perSubject.map((p) => ({ subjectId: p.subjectId, correct: Number(p.correct), total: Number(p.total) })),
+    };
   }
 
   private async fetchQuestionsForSimulado(simuladoId: number): Promise<SimuladoQuestionRow[]> {
