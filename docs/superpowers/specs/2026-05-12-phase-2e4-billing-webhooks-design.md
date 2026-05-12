@@ -1,6 +1,6 @@
 # Phase 2E.4 — Billing Webhooks: Google Play (Design Spec)
 
-**Status:** v1
+**Status:** v2 (post Gate A: productId source, extended notification types, multi-sub revoke guard, replay semantics, env wiring, test cleanup)
 **Date:** 2026-05-12
 **Branch:** `feature/phase-2e4-billing-webhooks`
 **Product source:** `pruvi-freatures.md` §5.1 (Ultra subscription, "Cobrança via Google Play / App Store billing")
@@ -39,7 +39,7 @@ Wire Google Play Real-Time Developer Notifications (RTDN) to the existing Ultra 
 6. Each handled event records a `billing_event` audit row, optionally updates the `subscription` row, and optionally calls `UltraService.grant` or `UltraService.revoke`.
 7. The user's `users.isUltra` and `users.ultraExpiresAt` reflect the current entitlement.
 
-Race-safety: linking before the webhook fires is the expected order; the webhook fires before linking is also possible (especially in a slow-network scenario). The handler MUST store the event regardless of whether a `subscription` row exists; if no row exists yet, the audit row is parked with `user_id = NULL` and the subscription is **created** in `pending` state. When the link call later arrives, the existing `pending` subscription row is updated with the `user_id`, and any unprocessed audit rows for that token are replayed inside the same transaction (best-effort; documented as a known limit if Pub/Sub retries don't naturally redeliver).
+Race-safety: linking before the webhook fires is the expected order; the webhook fires before linking is also possible (especially in a slow-network scenario). The handler MUST store the event regardless of whether a `subscription` row exists; if no row exists yet, the audit row is parked with `subscription_id = NULL` (resolved from `purchase_token` lookup which returns nothing). When the link call later arrives, the existing `pending` subscription row is updated with the `user_id` AND parked events are replayed (see §7.6 for the precise replay procedure).
 
 ## 5. Data model
 
@@ -107,7 +107,16 @@ Notes:
 | 10 | PAUSED | status → `paused` | revoke |
 | 11 | PAUSE_SCHEDULE_CHANGED | no-op | no-op |
 | 12 | REVOKED | status → `revoked` | revoke |
-| 13 | EXPIRED | status → `expired` | revoke |
+| 13 | EXPIRED | status → `expired` | revoke (subject to multi-sub guard, §7.2) |
+| 17 | ITEMS_CHANGED | no-op | no-op |
+| 18 | CANCELLATION_SCHEDULED | no-op (entitlement until expiry, like type 3) | no-op |
+| 19 | PRICE_CHANGE_UPDATED | no-op | no-op |
+| 20 | PENDING_PURCHASE_CANCELED | no-op | no-op |
+| 22 | PRICE_STEP_UP_CONSENT_UPDATED | no-op | no-op |
+
+Type 8 (PRICE_CHANGE_CONFIRMED) is **deprecated** in Google's current RTDN reference but still deliverable; treated as no-op.
+
+Notification types not listed above (e.g., future Google additions) are routed through the decoder's `{ kind: "unknown" }` branch: audit row recorded, no state mutation. Operators see them in the `billing_event` table for triage.
 
 **Rationale notes:**
 - "Leave grant in place" for CANCELED matches Google's policy: users who cancel mid-cycle retain benefits until period end. EXPIRED will fire at the period end and trigger revocation.
@@ -140,12 +149,18 @@ Why split `google-play.decoder.ts` from `billing.service.ts`: the decoder is pur
 - **Webhook route** (`google-play.webhook.ts`): verifies shared-secret header, parses Pub/Sub envelope, dispatches to service. Returns 200 even on application-level errors (so Pub/Sub doesn't retry forever); errors are recorded in `billing_event.processing_error`.
 - **Link route** (`billing.route.ts`): authenticated; upserts the subscription row.
 - **Service** (`billing.service.ts`): orchestrates dedup → audit row insert → state-machine dispatch → subscription update → Ultra grant/revoke. Receives an injected `UltraService` reference.
+
+  **Multi-subscription revoke guard (MANDATORY):** Before calling `UltraService.revoke(userId)`, the service MUST check whether the user has ANY OTHER subscription row with `status IN ('active', 'in_grace')`. If yes, the revoke is SKIPPED — the user retains Ultra from the still-entitled subscription. If no, `revoke` proceeds. Rationale: a user who re-subscribes before their cancelled subscription expires can hold two rows; the EXPIRED webhook for the old row must not strip Ultra from the new one. Concretely: `BillingService.handleRevocationFor(subscription)` queries `SELECT 1 FROM subscription WHERE user_id = $userId AND id != $subscriptionId AND status IN ('active','in_grace') LIMIT 1`; if any row exists, return without revoking.
+
+  **Multi-subscription grant guard (when fixing currentPeriodEnd):** When granting Ultra, if the user has another active subscription with a LATER `currentPeriodEnd`, use the maximum of the two as the Ultra expiry. Rule: `user.ultraExpiresAt = MAX(allActive.currentPeriodEnd)`.
 - **Decoder** (`google-play.decoder.ts`): pure function `decodeGooglePlayPubSubEnvelope(raw)` returning `{ messageId, eventType, purchaseToken, notificationType, productId }`. No DB or HTTP.
 - **Repository** (`billing.repository.ts`): Drizzle queries for subscriptions and events. All writes in a single transaction when crossing both tables.
 
 ### 7.3 Shared-secret webhook auth
 
-The `/webhooks/google-play` endpoint expects an `X-Pruvi-Webhook-Token` header that matches `env.GOOGLE_PLAY_WEBHOOK_TOKEN`. Constant-time comparison via `timingSafeEqual`. If the token is missing in env, the endpoint returns `503 ADMIN_DISABLED` (matching the existing admin-route pattern). If the token doesn't match, 401.
+The `/webhooks/google-play` endpoint expects an `X-Pruvi-Webhook-Token` header that matches `env.GOOGLE_PLAY_WEBHOOK_TOKEN`. Constant-time comparison via `timingSafeEqual`. If the token is missing in env, the endpoint returns `503 WEBHOOK_DISABLED`. If the token doesn't match, 401.
+
+**Env declaration:** `GOOGLE_PLAY_WEBHOOK_TOKEN` MUST be declared in `packages/env/src/server.ts` as `z.string().min(16).optional()` — mirroring the existing `ADMIN_API_TOKEN` pattern. Optional so dev environments without the token still boot; the route returns 503 at runtime when missing. The plan MUST include a task to add this env field.
 
 Real Pub/Sub OIDC auth is deferred. The shared-secret model is acceptable for a non-public infrastructure endpoint behind a known CDN/proxy IP allowlist.
 
@@ -164,14 +179,63 @@ Google sends:
 }
 ```
 
-The decoder:
+The inner `DeveloperNotification` (after base64 decode) has shape:
+```json
+{
+  "version": "1.0",
+  "packageName": "com.pruvi.app",
+  "eventTimeMillis": "1747044000000",
+  "subscriptionNotification": {
+    "version": "1.0",
+    "notificationType": 4,
+    "purchaseToken": "opaque-token-string"
+  }
+}
+```
+
+**Important: `subscriptionNotification` does NOT carry `subscriptionId` or `productId`.** Per Google's RTDN reference (https://developer.android.com/google/play/billing/rtdn-reference), the object has exactly three fields: `version`, `notificationType`, `purchaseToken`. The `productId` is NOT in the webhook payload — it MUST be retrieved from the `subscription` row we previously stored at link time (keyed by `(provider, purchase_token)`). If no `subscription` row exists yet (pre-link race), the event is still parked in `billing_event`; the productId stays unknown until link.
+
+The decoder is pure and returns:
+
+```ts
+type DecodedGooglePlayEvent =
+  | { kind: "subscription"; messageId: string; publishTime: string; packageName: string; eventTimeMillis: string; notificationType: number; notificationTypeName: GooglePlayNotificationTypeName; purchaseToken: string }
+  | { kind: "test"; messageId: string }
+  | { kind: "unknown"; messageId: string; notificationType: number; purchaseToken: string };
+```
+
+Steps:
 1. Reads `message.messageId` → audit dedup key.
 2. base64-decodes `message.data` → the inner notification JSON.
-3. Reads `subscriptionNotification.purchaseToken`, `subscriptionNotification.notificationType`, `subscriptionNotification.subscriptionId` (productId).
-4. Maps `notificationType` integer → enum string (see §6).
-5. Returns the structured decoded event.
+3. If the inner payload has `testNotification`: returns `{ kind: "test", messageId }`.
+4. Reads `subscriptionNotification.purchaseToken`, `notificationType` (integer).
+5. Maps `notificationType` integer → enum name (see §6 table). For values not in the mapped set, returns `{ kind: "unknown", messageId, notificationType, purchaseToken }` — the handler will record the audit row but take no Ultra-state action.
+6. Returns the decoded structure. **`productId` is intentionally NOT in the return type — looked up from the subscription row by the service.**
 
-If the inner payload is a `testNotification` (Google sends test pings to verify the endpoint), the decoder returns `{ kind: "test" }`. The service records the audit row but takes no further action.
+### 7.6 Parked-event replay (link-time)
+
+When `POST /billing/google-play/link` succeeds at associating `user_id` with a previously webhook-created `subscription` row (or creates the row fresh — same code path), the link handler MUST replay any unprocessed `billing_event` rows for that `purchase_token`. The procedure:
+
+1. **Inside the link transaction** (single `db.transaction`):
+   a. Find or create the `subscription` row by `(provider, purchase_token)`. Set `user_id`, `linked_at`, `product_id` (from the link request body) if not already set.
+   b. Fetch all `billing_event` rows where `purchase_token = $token AND provider = 'google_play' AND processed_at IS NULL`, ordered by `received_at ASC` (so earlier events apply before later ones).
+   c. For each parked event, call the SHARED state-machine dispatch function `applyDecodedEvent(decoded, subscription, tx)` — the same function used by the webhook handler. The function updates `subscription.status` and `current_period_end` per §6 and sets `processed_at = now()` on the audit row, all inside the transaction.
+   d. After applying all parked events, determine the final Ultra state from the subscription's final `status` and `current_period_end`.
+2. **Commit the transaction.** The subscription state + audit rows + linked user are now consistent.
+3. **After commit (outside the transaction)**, call `UltraService.grant(userId, currentPeriodEnd)` or `UltraService.revoke(userId)` (the multi-sub guard, §7.2). This is intentionally a two-phase pattern: the Ultra update on `users` is committed in a separate transaction. The window of inconsistency (link committed, Ultra not yet granted) is bounded by the duration of the grant call — sub-millisecond — and the grant is idempotent. If the process crashes between commit and grant, the `subscription` row exists in `active` status with `processed_at` set on the events but `user.isUltra = false`; a future state event (or operator) can reconcile. We accept this bounded inconsistency to keep the link transaction scope tight.
+
+**Why not include the Ultra update in the same transaction?** Two reasons: (1) `UltraService.grant` is on a separate concern boundary (Ultra entitlement is owned by the `ultra` module, not `billing`); reaching across boundaries to share a transaction couples them; (2) `user.isUltra` is touched by other features (admin grant, future flows) — putting it inside the billing transaction creates lock contention. The two-phase commit is the documented trade-off.
+
+**Webhook handler path: same shared `applyDecodedEvent` function.** The webhook handler:
+1. Validates auth, decodes envelope, computes `messageId`.
+2. Opens a transaction:
+   a. INSERT INTO `billing_event` (provider, message_id, event_type, purchase_token, payload, received_at) ... ON CONFLICT DO NOTHING. If conflict (duplicate delivery), commit and return 200.
+   b. Find `subscription` by `(provider, purchase_token)`. If none exists yet (pre-link), create one with `user_id = NULL`, `status = 'pending'`, `product_id = ''` (filled at link time).
+   c. Call `applyDecodedEvent(decoded, subscription, tx)` — same shared function. If `subscription.user_id IS NULL`, the function still updates subscription state but does NOT attempt Ultra grant/revoke; it sets `processed_at` so that link-time replay knows it has been state-applied. Actually — to support correct replay-on-link, the webhook handler at pre-link time should NOT set `processed_at`. Instead: when `subscription.user_id IS NULL`, the shared function leaves `processed_at = NULL` so that the link replay re-applies the state and triggers Ultra grant. Document this branch explicitly in the function.
+3. Commit the transaction.
+4. If `subscription.user_id` is set AND the event was newly applied (not a dup), call `UltraService.grant`/`revoke` after commit, same two-phase pattern as link.
+
+This shared `applyDecodedEvent(decoded, subscription, tx)` function is the heart of the service. Its signature, contract, and `processed_at` semantics MUST be precisely defined in the plan's task breakdown.
 
 ### 7.5 Logging
 
@@ -184,10 +248,11 @@ All webhook activity (received, decoded, processed, errors) goes through `fastif
 **Auth:** `X-Pruvi-Webhook-Token` header matches `env.GOOGLE_PLAY_WEBHOOK_TOKEN`.
 **Body:** Pub/Sub push envelope (see §7.4).
 **Response:**
-- `200 { received: true, messageId }` — always returned when the message is accepted (even if processing later failed; processing errors are recorded in the audit row and inspected via ops tooling, NOT signaled back to Pub/Sub).
-- `401` — bad token.
-- `503` — env token not configured.
-- `400` — malformed envelope (NOT a Pub/Sub-recognized retryable shape; signals a real bug, so we DO want Pub/Sub to retry-with-backoff so we get alerted).
+- `200 { received: true, messageId? }` — returned when the message is accepted or already-deduped. Also returned when the envelope is malformed (with `{ received: false, error: "MALFORMED_ENVELOPE" }` in body) — Pub/Sub treats non-200 as retry, and a 400 on malformed shapes would cause infinite retry storms. Ops monitors the `billing_event` and server logs to detect malformed payloads.
+- `200 { received: true, kind: "test" }` — Google's test ping.
+- `200 { received: true, error: "PROCESSING_FAILED" }` — application-level handler error after audit row write; the error string is logged + persisted to `billing_event.processing_error` for ops triage.
+- `401` — bad token (NOT 4xx for Pub/Sub from Google, so Google will retry — that's correct behavior; auth issues should surface as alerts).
+- `503` — env token not configured (returns `{ error: "WEBHOOK_DISABLED" }`).
 
 ### 8.2 `POST /billing/google-play/link`
 
@@ -214,9 +279,10 @@ GooglePlayLinkResponseSchema = z.object({
 Semantics:
 - Upserts on `(provider="google_play", purchase_token)`.
 - If a row exists with a different `user_id` already set: returns `409 PURCHASE_TOKEN_OWNED_BY_OTHER_USER`. (Defense against a malicious client copying another user's token.)
-- If a row exists with no `user_id`: claims it by setting `user_id` and replays any unprocessed `billing_event` rows for that token inside the transaction.
-- If no row exists: creates one with `status = "pending"`.
-- `linked_at` set to now() on the first time `user_id` is set.
+- If a row exists already linked to the SAME user (idempotent re-call): returns `200` with the CURRENT subscription state (status reflects whatever state the latest webhook moved it to — could be `pending`, `active`, `expired`, etc.). No-op on the row.
+- If a row exists with no `user_id` (parked from pre-link webhook): claims it by setting `user_id`, `linked_at`, and `product_id` (overwriting empty productId from webhook-creation), then replays unprocessed `billing_event` rows per §7.6 inside the link transaction.
+- If no row exists: creates one with `status = "pending"`, `product_id` from the request body, `linked_at = now()`.
+- `linked_at` set to now() on the first time `user_id` is associated.
 
 ## 9. Migration
 
@@ -241,6 +307,8 @@ Semantics:
 - ON_HOLD / PAUSED → revoked.
 - Duplicate `messageId` → no-op (audit dedup), returns success.
 
+**Test harness preparation:** `apps/server/src/test/db-helpers.ts` `cleanupTestDb` MUST be updated to include `billing_event, subscription` in the TRUNCATE list (children-first ordering relative to `user`; both have CASCADE/SET NULL semantics so the trailing CASCADE handles them, but explicit listing prevents leftover-row pollution across tests on the UNIQUE constraints).
+
 **Integration** (`billing.repository.integration.test.ts`, real Postgres):
 - Audit dedup: inserting two events with the same `(provider, message_id)` produces one row.
 - Subscription upsert: link → webhook RENEWED → state visible.
@@ -264,6 +332,11 @@ A11. The state machine in §6 is enforced — each `notificationType` integer ma
 A12. The `billing_event` table has UNIQUE `(provider, message_id)` enforced at the DB layer.
 A13. The `subscription` table has UNIQUE `(provider, purchase_token)` enforced at the DB layer.
 A14. All errors logged via `fastify.log` (structured). No `console.error` in production paths.
+A15. A user with two subscription rows (one expired, one active) does NOT lose Ultra when the EXPIRED webhook for the older row arrives — `BillingService` consults other subscriptions before revoking (§7.2 multi-sub revoke guard).
+A16. The shared `applyDecodedEvent(decoded, subscription, tx)` function is called from BOTH the webhook handler AND the link-time replay loop — single source of state transition logic (no duplication). See §7.6.
+A17. `GOOGLE_PLAY_WEBHOOK_TOKEN` is declared in `packages/env/src/server.ts` as `z.string().min(16).optional()`. Missing token at request time → 503 `WEBHOOK_DISABLED`.
+A18. `cleanupTestDb` in `apps/server/src/test/db-helpers.ts` includes `billing_event, subscription` in its TRUNCATE list (children before parents) so integration tests do not pollute each other on UNIQUE constraints.
+A19. Decoder returns `{ kind: "unknown", ... }` for any `notificationType` not in §6 (including future Google additions and types 17–22 documented but treated as no-op). Audit row recorded; no state mutation.
 
 ## 12. Deferred items
 
