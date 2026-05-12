@@ -10,6 +10,7 @@ import { user } from "@pruvi/db/schema/auth";
 import { invitationAcceptance } from "@pruvi/db/schema/invitation-acceptance";
 import { friendship } from "@pruvi/db/schema/friendship";
 import { InvitationsRepository } from "./invitations.repository";
+import { MAX_STREAK_SHIELDS } from "@pruvi/shared";
 
 describe("InvitationsRepository (integration)", () => {
   const db = getTestDb();
@@ -125,6 +126,55 @@ describe("InvitationsRepository (integration)", () => {
       expect(friendships).toHaveLength(1);
       expect(friendships[0]?.status).toBe("accepted");
       expect(friendships[0]?.requesterId).toBe("inviter-3");
+    });
+
+    describe("acceptInvitation reward semantics (Phase 2E.6)", () => {
+      it("preference=xp → +100 XP, reward_type=xp", async () => {
+        await insertUser("inv-xp-1");
+        await insertUser("invi-xp-1");
+        // Default preference is 'xp'.
+        const result = await repo.acceptInvitation("inv-xp-1", "invi-xp-1");
+        expect(result).toEqual({ rewardType: "xp", xpAwarded: 100, shieldGranted: false });
+        const inviter = await db.select({ xp: user.totalXp, shields: user.streakShieldsAvailable })
+          .from(user).where(eq(user.id, "inv-xp-1"));
+        expect(inviter[0]!.xp).toBe(100);
+        expect(inviter[0]!.shields).toBe(0);
+        const audit = await db.select({ rt: invitationAcceptance.rewardType })
+          .from(invitationAcceptance).where(eq(invitationAcceptance.inviterId, "inv-xp-1"));
+        expect(audit[0]!.rt).toBe("xp");
+      });
+
+      it("preference=shield + shields=0 → +1 shield, reward_type=shield", async () => {
+        await insertUser("inv-sh-1");
+        await insertUser("invi-sh-1");
+        await db.update(user).set({ inviteRewardPreference: "shield" }).where(eq(user.id, "inv-sh-1"));
+        const result = await repo.acceptInvitation("inv-sh-1", "invi-sh-1");
+        expect(result).toEqual({ rewardType: "shield", xpAwarded: 0, shieldGranted: true });
+        const inviter = await db.select({ xp: user.totalXp, shields: user.streakShieldsAvailable })
+          .from(user).where(eq(user.id, "inv-sh-1"));
+        expect(inviter[0]!.shields).toBe(1);
+        expect(inviter[0]!.xp).toBe(0);
+        const audit = await db.select({ rt: invitationAcceptance.rewardType })
+          .from(invitationAcceptance).where(eq(invitationAcceptance.inviterId, "inv-sh-1"));
+        expect(audit[0]!.rt).toBe("shield");
+      });
+
+      it("preference=shield + shields already at MAX → falls back to XP, reward_type=xp", async () => {
+        await insertUser("inv-cap-1");
+        await insertUser("invi-cap-1");
+        await db.update(user)
+          .set({ inviteRewardPreference: "shield", streakShieldsAvailable: MAX_STREAK_SHIELDS })
+          .where(eq(user.id, "inv-cap-1"));
+        const result = await repo.acceptInvitation("inv-cap-1", "invi-cap-1");
+        expect(result).toEqual({ rewardType: "xp", xpAwarded: 100, shieldGranted: false });
+        const inviter = await db.select({ xp: user.totalXp, shields: user.streakShieldsAvailable })
+          .from(user).where(eq(user.id, "inv-cap-1"));
+        expect(inviter[0]!.shields).toBe(MAX_STREAK_SHIELDS); // unchanged
+        expect(inviter[0]!.xp).toBe(100);
+        const audit = await db.select({ rt: invitationAcceptance.rewardType })
+          .from(invitationAcceptance).where(eq(invitationAcceptance.inviterId, "inv-cap-1"));
+        expect(audit[0]!.rt).toBe("xp");
+      });
     });
 
     it("does not partially commit when friendship insert fails due to duplicate (atomicity)", async () => {
