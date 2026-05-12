@@ -6,6 +6,8 @@ import { BillingRepository } from "../features/billing/billing.repository";
 import { BillingService } from "../features/billing/billing.service";
 import { UltraService } from "../features/ultra/ultra.service";
 import { UltraRepository } from "../features/ultra/ultra.repository";
+import { loadServiceAccountFromEnv } from "../features/billing/google-play.service-account";
+import { GooglePlayApiClient } from "../features/billing/google-play.api-client";
 
 type BillingSweepJobData = { kind: "sweep" };
 
@@ -18,7 +20,8 @@ export function startBillingSweepWorker() {
   const connection = parseRedisUrl(env.REDIS_URL);
   const repo = new BillingRepository();
   const ultra = new UltraService(new UltraRepository(db));   // canonical construction per billing.route.ts:16
-  const service = new BillingService(db, repo, ultra);
+  const apiClient = new GooglePlayApiClient(loadServiceAccountFromEnv(env));
+  const service = new BillingService(db, repo, ultra, apiClient, env.GOOGLE_PLAY_PACKAGE_NAME ?? null);
 
   const worker = new Worker<BillingSweepJobData>(
     "billing-cron",

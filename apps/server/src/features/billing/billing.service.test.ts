@@ -3,6 +3,13 @@ import { BillingService } from "./billing.service";
 import type { BillingRepository, SubscriptionRow, BillingEventRow } from "./billing.repository";
 import type { UltraService } from "../ultra/ultra.service";
 import type { db as DbClient } from "@pruvi/db";
+import type { GooglePlayApiClient } from "./google-play.api-client";
+
+function makeStubApiClient(realExpiry: Date | null = null): GooglePlayApiClient {
+  return {
+    getSubscription: vi.fn().mockResolvedValue(realExpiry),
+  } as unknown as GooglePlayApiClient;
+}
 
 type Mocked<T> = { [K in keyof T]: T[K] extends (...a: infer A) => infer R ? ReturnType<typeof vi.fn<(...a: A) => R>> : T[K] };
 
@@ -16,6 +23,7 @@ function buildSut(opts: {
   maxOtherEnd?: Date | null;
   upsertLinked?: { subscription: SubscriptionRow; created: boolean };
   claimOrphan?: SubscriptionRow;
+  apiClient?: GooglePlayApiClient;
 } = {}) {
   const repo = {
     insertEvent: vi.fn().mockResolvedValue(opts.insertEvent ?? { id: 1, provider: "google_play", messageId: "m1", eventType: "PURCHASED", purchaseToken: "tok", payload: {}, receivedAt: new Date(), processedAt: null, processingError: null }),
@@ -36,8 +44,9 @@ function buildSut(opts: {
   const db = {
     transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => cb(repo)),
   } as unknown as typeof DbClient;
-  const service = new BillingService(db, repo as unknown as BillingRepository, ultra as unknown as UltraService);
-  return { service, repo, ultra, db };
+  const apiClient = opts.apiClient ?? makeStubApiClient(null);
+  const service = new BillingService(db, repo as unknown as BillingRepository, ultra as unknown as UltraService, apiClient, null);
+  return { service, repo, ultra, db, apiClient };
 }
 
 function buildEnvelope(notificationType: number, purchaseToken = "tok", messageId = "msg-1") {
@@ -166,6 +175,67 @@ describe("BillingService", () => {
     expect(repo.claimOrphanSubscription).toHaveBeenCalledWith(expect.anything(), 10, "u1", "p");
     expect(repo.markEventProcessed).toHaveBeenCalledWith(expect.anything(), 5);
     expect(ultra.grant).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("real expiryTime override", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("RENEWED with apiClient returning a real expiry uses that date for currentPeriodEnd and grant", async () => {
+    const realExpiry = new Date("2026-06-12T15:30:00Z");
+    const linked: SubscriptionRow = { id: 20, userId: "u2", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: null, linkedAt: new Date() };
+    const apiClient = makeStubApiClient(realExpiry);
+    const { service, repo, ultra } = buildSut({ findSubscription: linked, apiClient });
+    const r = await service.processGooglePlayEnvelope(buildEnvelope(2));   // RENEWED
+    expect(r.isOk()).toBe(true);
+    expect(apiClient.getSubscription).toHaveBeenCalledWith("com.pruvi.app", "tok");
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 20, expect.objectContaining({ status: "active", currentPeriodEnd: realExpiry }));
+    expect(ultra.grant).toHaveBeenCalledWith("u2", realExpiry);
+  });
+
+  it("RENEWED with apiClient returning null falls back to now + 30d", async () => {
+    const linked: SubscriptionRow = { id: 21, userId: "u3", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: null, linkedAt: new Date() };
+    const { service, repo } = buildSut({ findSubscription: linked, apiClient: makeStubApiClient(null) });
+    const before = Date.now();
+    const r = await service.processGooglePlayEnvelope(buildEnvelope(2));
+    expect(r.isOk()).toBe(true);
+    const call = repo.updateSubscriptionState.mock.calls[0]!;
+    const end = call[2].currentPeriodEnd as Date;
+    const expected = before + 30 * 24 * 60 * 60 * 1000;
+    expect(end.getTime()).toBeGreaterThanOrEqual(expected);
+    expect(end.getTime()).toBeLessThanOrEqual(expected + 5000);
+  });
+
+  it("empty packageName + null fallback skips API call and uses 30-day default", async () => {
+    const linked: SubscriptionRow = { id: 23, userId: "u5", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: null, linkedAt: new Date() };
+    const apiClient = makeStubApiClient(new Date("2026-06-12T00:00:00Z"));
+    const { service, repo } = buildSut({ findSubscription: linked, apiClient });
+    // Build an envelope whose inner packageName is empty:
+    const innerNoPkg = { packageName: "", subscriptionNotification: { notificationType: 2, purchaseToken: "tok", version: "1.0" } };
+    const envNoPkg = { message: { messageId: "msg-no-pkg", publishTime: "2026-05-12T10:00:00Z", data: Buffer.from(JSON.stringify(innerNoPkg)).toString("base64") } };
+    const before = Date.now();
+    const r = await service.processGooglePlayEnvelope(envNoPkg);
+    expect(r.isOk()).toBe(true);
+    expect(apiClient.getSubscription).not.toHaveBeenCalled();
+    const end = repo.updateSubscriptionState.mock.calls[0]![2].currentPeriodEnd as Date;
+    const expected = before + 30 * 24 * 60 * 60 * 1000;
+    expect(end.getTime()).toBeGreaterThanOrEqual(expected);
+    expect(end.getTime()).toBeLessThanOrEqual(expected + 5000);
+  });
+
+  it("non-grant events (CANCELED) do NOT call apiClient.getSubscription", async () => {
+    const linked: SubscriptionRow = { id: 22, userId: "u4", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date("2026-12-01"), linkedAt: new Date() };
+    const apiClient = makeStubApiClient(new Date("2026-06-12T00:00:00Z"));
+    const { service } = buildSut({ findSubscription: linked, apiClient });
+    await service.processGooglePlayEnvelope(buildEnvelope(3));   // CANCELED
+    expect(apiClient.getSubscription).not.toHaveBeenCalled();
+  });
+
+  it("unknown notificationType does NOT call apiClient.getSubscription", async () => {
+    const apiClient = makeStubApiClient(new Date("2026-06-12T00:00:00Z"));
+    const { service } = buildSut({ apiClient });
+    await service.processGooglePlayEnvelope(buildEnvelope(99));
+    expect(apiClient.getSubscription).not.toHaveBeenCalled();
   });
 });
 

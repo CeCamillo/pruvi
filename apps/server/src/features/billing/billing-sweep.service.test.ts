@@ -3,6 +3,7 @@ import { BillingService } from "./billing.service";
 import type { BillingRepository, SubscriptionRow } from "./billing.repository";
 import type { UltraService } from "../ultra/ultra.service";
 import type { db as DbClient } from "@pruvi/db";
+import type { GooglePlayApiClient } from "./google-play.api-client";
 
 type FakeDb = Pick<typeof DbClient, "transaction">;
 
@@ -38,7 +39,8 @@ describe("BillingService.runReconciliationSweep", () => {
       transaction: async <T,>(fn: (tx: unknown) => Promise<T>) => fn({}),
     } as unknown as FakeDb as typeof DbClient;
 
-    const svc = new BillingService(fakeDb, repo, ultra);
+    const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 1, expired: 1, revoked: 1 });
@@ -57,7 +59,8 @@ describe("BillingService.runReconciliationSweep", () => {
     const ultra = { revoke: vi.fn(), grant: vi.fn() } as unknown as UltraService;
     const fakeDb = { transaction: async <T,>(fn: (tx: unknown) => Promise<T>) => fn({}) } as unknown as FakeDb as typeof DbClient;
 
-    const svc = new BillingService(fakeDb, repo, ultra);
+    const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 1, expired: 1, revoked: 0 });
@@ -76,7 +79,8 @@ describe("BillingService.runReconciliationSweep", () => {
     const ultra = { revoke: vi.fn(), grant: vi.fn() } as unknown as UltraService;
     const fakeDb = { transaction: async <T,>(fn: (tx: unknown) => Promise<T>) => fn({}) } as unknown as FakeDb as typeof DbClient;
 
-    const svc = new BillingService(fakeDb, repo, ultra);
+    const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 1, expired: 0, revoked: 0 });
@@ -96,7 +100,8 @@ describe("BillingService.runReconciliationSweep", () => {
     const ultra = { revoke: vi.fn(), grant: vi.fn() } as unknown as UltraService;
     const fakeDb = { transaction: async <T,>(fn: (tx: unknown) => Promise<T>) => fn({}) } as unknown as FakeDb as typeof DbClient;
 
-    const svc = new BillingService(fakeDb, repo, ultra);
+    const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 1, expired: 0, revoked: 0 });
@@ -116,7 +121,8 @@ describe("BillingService.runReconciliationSweep", () => {
     const ultra = { revoke: vi.fn().mockResolvedValue(undefined), grant: vi.fn() } as unknown as UltraService;
     const fakeDb = { transaction: txSpy } as unknown as FakeDb as typeof DbClient;
 
-    const svc = new BillingService(fakeDb, repo, ultra);
+    const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 2, expired: 2, revoked: 2 });
