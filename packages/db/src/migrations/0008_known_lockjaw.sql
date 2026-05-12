@@ -2,12 +2,12 @@ ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "streak_shields_available" integer N
 --> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "last_shield_grant_at" timestamp;
 --> statement-breakpoint
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'user_streak_shields_chk') THEN
-    ALTER TABLE "user" ADD CONSTRAINT "user_streak_shields_chk"
-      CHECK ("streak_shields_available" >= 0 AND "streak_shields_available" <= 1);
-  END IF;
-END $$;
+-- Drop-and-recreate so the constraint reflects the current bound (per spec v2 §5.3 MAX = 1).
+-- Idempotent: IF EXISTS guard handles fresh installs.
+ALTER TABLE "user" DROP CONSTRAINT IF EXISTS "user_streak_shields_chk";
+--> statement-breakpoint
+ALTER TABLE "user" ADD CONSTRAINT "user_streak_shields_chk"
+  CHECK ("streak_shields_available" >= 0 AND "streak_shields_available" <= 1);
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "streak_shield_usage" (
   "id" serial PRIMARY KEY,
