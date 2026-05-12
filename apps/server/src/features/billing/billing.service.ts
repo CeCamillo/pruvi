@@ -8,8 +8,12 @@ import { decodeGooglePlayPubSubEnvelope } from "./google-play.decoder";
 import type { DecodedAppStoreEvent } from "./app-store.decoder";
 import { decodeAppStoreNotification } from "./app-store.decoder";
 import type { db as DbClient } from "@pruvi/db";
+import type { GooglePlayApiClient } from "./google-play.api-client";
 
 type Db = typeof DbClient;
+
+/** Google Play notification types that grant/extend an active subscription. */
+const GRANT_TYPES: ReadonlySet<string> = new Set(["PURCHASED", "RENEWED", "RECOVERED", "RESTARTED"]);
 
 /** Effect to apply AFTER the transaction commits (two-phase pattern per spec §7.6).
  *  Both `grant` and `revoke` variants carry `excludeSubscriptionId` so the post-commit
@@ -26,6 +30,8 @@ export class BillingService {
     private db: Db,
     private repo: BillingRepository,
     private ultra: UltraService,
+    private apiClient: GooglePlayApiClient,
+    private packageNameFallback: string | null,
   ) {}
 
   /** Webhook entry point. Returns the response payload; always 200 on accepted shapes.
@@ -48,6 +54,18 @@ export class BillingService {
         payload: { kind: "test" },
       });
       return ok({ messageId: decoded.messageId, kind: "test" });
+    }
+
+    // Look up real expiryTime from Google Play API BEFORE the TX (avoid holding row locks during I/O).
+    // Only performed for grant events; all other events use the existing fallback logic.
+    let realExpiryTime: Date | null = null;
+    if (decoded.kind === "subscription" && GRANT_TYPES.has(decoded.notificationTypeName)) {
+      const packageName = decoded.packageName || this.packageNameFallback || null;
+      if (!packageName) {
+        console.warn({ messageId: decoded.messageId, reason: "no_package_name" }, "google-play real-expiry fallback");
+      } else {
+        realExpiryTime = await this.apiClient.getSubscription(packageName, decoded.purchaseToken);
+      }
     }
 
     const effect = await this.db.transaction(async (tx) => {
@@ -76,7 +94,7 @@ export class BillingService {
         sub = await this.repo.createOrphanSubscription(tx, "google_play", decoded.purchaseToken);
       }
 
-      const { newStatus, newPeriodEnd, ultraEffect } = this.applyDecodedEvent(decoded, sub);
+      const { newStatus, newPeriodEnd, ultraEffect } = this.applyDecodedEvent(decoded, sub, realExpiryTime);
       await this.repo.updateSubscriptionState(tx, sub.id, { status: newStatus, currentPeriodEnd: newPeriodEnd });
 
       // If subscription has no user yet, leave processed_at = NULL so link can replay.
@@ -127,6 +145,9 @@ export class BillingService {
         const fresh = await this.repo.findSubscriptionByToken(tx, "google_play", body.purchaseToken);
         if (!fresh) throw new Error("replay: subscription disappeared mid-transaction");
         sub = fresh;
+        // NOTE: replay intentionally omits realExpiryTime (3rd arg) — see spec §4.1.
+        // Reason: outbound API call inside the link TX would hold row locks for 100ms+
+        // and could deadlock. The next live webhook reconciles the period end.
         const { newStatus, newPeriodEnd, ultraEffect } = this.applyDecodedEvent(decoded, sub);
         await this.repo.updateSubscriptionState(tx, sub.id, { status: newStatus, currentPeriodEnd: newPeriodEnd });
         await this.repo.markEventProcessed(tx, event.id);
@@ -152,16 +173,19 @@ export class BillingService {
     });
   }
 
-  /** Pure state-machine: maps (event, current subscription) → next state + ultra effect. NO DB writes. */
+  /** Pure state-machine: maps (event, current subscription) → next state + ultra effect. NO DB writes.
+   *  @param realExpiryTime — when supplied (from Google Play API), grant events use this instead of now+30d. */
   applyDecodedEvent(
     decoded: DecodedGooglePlayEvent,
     sub: SubscriptionRow,
+    realExpiryTime?: Date | null,
   ): { newStatus: SubscriptionStatus; newPeriodEnd: Date | null; ultraEffect: PostCommitUltraEffect } {
     if (decoded.kind !== "subscription") {
       return { newStatus: sub.status, newPeriodEnd: sub.currentPeriodEnd, ultraEffect: { kind: "none" } };
     }
     const now = new Date();
     const defaultEnd = new Date(now.getTime() + DEFAULT_SUBSCRIPTION_PERIOD_MS);
+    const grantEnd = realExpiryTime ?? defaultEnd;
     const name = decoded.notificationTypeName;
     const grant = (end: Date): PostCommitUltraEffect =>
       sub.userId !== null
@@ -177,7 +201,7 @@ export class BillingService {
       case "RENEWED":
       case "RECOVERED":
       case "RESTARTED":
-        return { newStatus: "active", newPeriodEnd: defaultEnd, ultraEffect: grant(defaultEnd) };
+        return { newStatus: "active", newPeriodEnd: grantEnd, ultraEffect: grant(grantEnd) };
       case "IN_GRACE_PERIOD":
         return { newStatus: "in_grace", newPeriodEnd: sub.currentPeriodEnd, ultraEffect: { kind: "none" } };
       case "CANCELED":
