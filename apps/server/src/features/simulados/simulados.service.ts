@@ -11,7 +11,6 @@ import {
 } from "@pruvi/shared";
 import type { SimuladosRepository, SimuladoQuestionRow } from "./simulados.repository";
 import type { UltraService } from "../ultra/ultra.service";
-import type { FastifyBaseLogger } from "fastify";
 
 const HISTORY_LIMIT = 4;
 
@@ -19,7 +18,6 @@ export class SimuladosService {
   constructor(
     private repo: SimuladosRepository,
     private ultra: UltraService,
-    private logger?: FastifyBaseLogger,
   ) {}
 
   /** Strips correctOptionIndex + explanation from questions that haven't been answered

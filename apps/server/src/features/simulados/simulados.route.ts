@@ -21,7 +21,7 @@ const CURRENT_CACHE_TTL = 60;
 export const simuladosRoutes: FastifyPluginAsyncZod = async (fastify) => {
   const repo = new SimuladosRepository(db);
   const ultra = new UltraService(new UltraRepository(db));
-  const service = new SimuladosService(repo, ultra, fastify.log);
+  const service = new SimuladosService(repo, ultra);
 
   fastify.get(
     "/simulados/current",

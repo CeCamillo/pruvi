@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { SimuladosService } from "./simulados.service";
-import { ok } from "neverthrow";
 import type { UltraService } from "../ultra/ultra.service";
 import type { SimuladosRepository } from "./simulados.repository";
 
