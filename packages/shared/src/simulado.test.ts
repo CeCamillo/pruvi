@@ -36,4 +36,18 @@ describe("weekBoundsForSimulado", () => {
     expect(weekStart).toBe("2026-05-03");
     expect(weekEnd).toBe("2026-05-10");
   });
+
+  it("for Sunday 00:00 BRT exactly (Sunday 03:00 UTC), weekStart is THAT Sunday", () => {
+    const now = new Date("2026-05-10T03:00:00Z");
+    const { weekStart, weekEnd } = weekBoundsForSimulado(now);
+    expect(weekStart).toBe("2026-05-10");
+    expect(weekEnd).toBe("2026-05-17");
+  });
+
+  it("for Sunday 23:59 BRT (Monday 02:59 UTC), weekStart is THAT Sunday", () => {
+    const now = new Date("2026-05-11T02:59:00Z");
+    const { weekStart, weekEnd } = weekBoundsForSimulado(now);
+    expect(weekStart).toBe("2026-05-10");
+    expect(weekEnd).toBe("2026-05-17");
+  });
 });

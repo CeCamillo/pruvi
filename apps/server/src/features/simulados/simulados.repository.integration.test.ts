@@ -5,6 +5,8 @@ import { question } from "@pruvi/db/schema/questions";
 import { subject } from "@pruvi/db/schema/subjects";
 import { topic, subtopic } from "@pruvi/db/schema/topics";
 import { SimuladosRepository } from "./simulados.repository";
+import { weeklySimulado, weeklySimuladoQuestion } from "@pruvi/db/schema/weekly-simulado";
+import { eq } from "drizzle-orm";
 
 describe("SimuladosRepository (integration)", () => {
   const db = getTestDb();
@@ -296,6 +298,51 @@ describe("SimuladosRepository (integration)", () => {
       const ps = agg.perSubject.sort((a, b) => a.subjectId - b.subjectId);
       expect(ps).toHaveLength(2);
       expect(ps.reduce((s, p) => s + p.total, 0)).toBe(6);
+    });
+  });
+
+  describe("DB constraints", () => {
+    it("deleting weekly_simulado cascades to weekly_simulado_question", async () => {
+      await insertUser("u-cascade-1");
+      await seedQuestions(5, 1);
+      const { simulado } = await repo.startOrGetSimulado("u-cascade-1", "2026-05-10", 5);
+      // Verify rows exist
+      const before = await db.select().from(weeklySimuladoQuestion);
+      expect(before.length).toBeGreaterThan(0);
+      // Delete parent
+      await db.delete(weeklySimulado).where(eq(weeklySimulado.id, simulado.id));
+      // Child rows should be gone
+      const after = await db
+        .select()
+        .from(weeklySimuladoQuestion)
+        .where(eq(weeklySimuladoQuestion.simuladoId, simulado.id));
+      expect(after.length).toBe(0);
+    });
+
+    it("UNIQUE constraint rejects duplicate (user_id, week_start_date)", async () => {
+      await insertUser("u-uq-1");
+      await seedQuestions(5, 1);
+      await db.insert(weeklySimulado).values({ userId: "u-uq-1", weekStartDate: "2026-05-10", questionsCount: 5 });
+      await expect(
+        db.insert(weeklySimulado).values({ userId: "u-uq-1", weekStartDate: "2026-05-10", questionsCount: 5 }).execute(),
+      ).rejects.toThrow();
+    });
+
+    it("UNIQUE constraint rejects duplicate (simulado_id, question_id)", async () => {
+      await insertUser("u-uq-2");
+      const [subjId] = await seedQuestions(5, 1);
+      const { simulado, questions } = await repo.startOrGetSimulado("u-uq-2", "2026-05-10", 5);
+      await expect(
+        db
+          .insert(weeklySimuladoQuestion)
+          .values({
+            simuladoId: simulado.id,
+            position: 99,
+            questionId: questions[0]!.questionId,
+          })
+          .execute(),
+      ).rejects.toThrow();
+      void subjId;
     });
   });
 });
