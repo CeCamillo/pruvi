@@ -119,4 +119,20 @@ describe("BillingRepository (integration)", () => {
     expect(after).not.toBeNull();
     expect(after!.userId).toBeNull();
   });
+
+  it("cross-provider: same message_id string for google_play and app_store coexist (composite UNIQUE)", async () => {
+    const a = await repo.insertEvent(db, { provider: "google_play", messageId: "shared-id", eventType: "PURCHASED", purchaseToken: "tA", payload: {} });
+    const b = await repo.insertEvent(db, { provider: "app_store", messageId: "shared-id", eventType: "SUBSCRIBED", purchaseToken: "tB", payload: {} });
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(a!.id).not.toBe(b!.id);
+  });
+
+  it("cross-provider: same purchase_token string for google_play and app_store coexist", async () => {
+    const a = await repo.createOrphanSubscription(db, "google_play", "shared-token");
+    const b = await repo.createOrphanSubscription(db, "app_store", "shared-token");
+    expect(a.id).not.toBe(b.id);
+    expect(a.provider).toBe("google_play");
+    expect(b.provider).toBe("app_store");
+  });
 });
