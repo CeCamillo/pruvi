@@ -402,6 +402,24 @@ export class SimuladosRepository {
     };
   }
 
+  async findByUserAndWeek(userId: string, weekStart: string): Promise<SimuladoRow | null> {
+    const rows = await this.db
+      .select()
+      .from(weeklySimulado)
+      .where(and(eq(weeklySimulado.userId, userId), eq(weeklySimulado.weekStartDate, weekStart)))
+      .limit(1);
+    const r = rows[0];
+    return r ? this.toSimuladoRow(r) : null;
+  }
+
+  async countAnswered(simuladoId: number): Promise<number> {
+    const res = await this.db
+      .select({ value: count() })
+      .from(weeklySimuladoQuestion)
+      .where(and(eq(weeklySimuladoQuestion.simuladoId, simuladoId), isNotNull(weeklySimuladoQuestion.selectedOptionIndex)));
+    return Number(res[0]!.value);
+  }
+
   private async fetchQuestionsForSimulado(simuladoId: number): Promise<SimuladoQuestionRow[]> {
     const rows = await this.db
       .select({
