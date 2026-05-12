@@ -3,7 +3,7 @@ import type { db as DbClient } from "@pruvi/db";
 
 type Db = typeof DbClient;
 
-export interface RawRankingRow {
+export interface RawRankingRow extends Record<string, unknown> {
   user_id: string;
   name: string;
   username: string | null;

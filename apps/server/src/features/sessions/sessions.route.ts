@@ -60,9 +60,18 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       // Check for pre-generated questions in Redis (already stripped of correctOptionIndex)
       const prefetchKey = `prefetch:${request.userId}`;
-      const cachedQuestions = await fastify.cache.get<unknown[]>(prefetchKey);
+      const cachedQuestions = await fastify.cache.get<Array<{ subtopicId: number }>>(prefetchKey);
+      const prefetchedSubtopicIds = cachedQuestions
+        ? Array.from(new Set(cachedQuestions.map((q) => q.subtopicId)))
+        : undefined;
 
-      const result = await service.startSession(request.userId, mode, !!cachedQuestions, topicId);
+      const result = await service.startSession(
+        request.userId,
+        mode,
+        !!cachedQuestions,
+        topicId,
+        prefetchedSubtopicIds,
+      );
       const { session, questions } = unwrapResult(result).data;
 
       // If cache hit, use cached questions; otherwise strip correctOptionIndex from DB results
