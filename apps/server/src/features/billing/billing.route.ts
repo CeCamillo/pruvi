@@ -11,10 +11,13 @@ import { BillingRepository } from "./billing.repository";
 import { BillingService } from "./billing.service";
 import { UltraRepository } from "../ultra/ultra.repository";
 import { UltraService } from "../ultra/ultra.service";
+import { loadServiceAccountFromEnv } from "./google-play.service-account";
+import { GooglePlayApiClient } from "./google-play.api-client";
 
 const repo = new BillingRepository();
 const ultra = new UltraService(new UltraRepository(db));
-const service = new BillingService(db, repo, ultra);
+const apiClient = new GooglePlayApiClient(loadServiceAccountFromEnv(env));
+const service = new BillingService(db, repo, ultra, apiClient, env.GOOGLE_PLAY_PACKAGE_NAME ?? null);
 
 // IMPORTANT: throw AppError subclasses so the project's error handler maps statusCode correctly.
 // Plain `throw new Error(...)` would fall through to the 500 branch regardless of reply.code().
