@@ -8,3 +8,4 @@ export * from "./push-tokens";
 export * from "./friendship";
 export * from "./invitation-acceptance";
 export * from "./streak-shield-usage";
+export * from "./weekly-simulado";

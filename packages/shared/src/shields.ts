@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BRT_OFFSET_MS } from "./time";
 
 export const MAX_STREAK_SHIELDS = 1;
 /** BRT = UTC-3, no DST (Brazil dropped DST in 2019). */
@@ -19,6 +20,6 @@ export type ShieldUseResult = z.infer<typeof ShieldUseResultSchema>;
 
 /** Returns the BRT-local YYYY-MM-DD for a given instant. */
 export function todayInBrt(now: Date): string {
-  const brtMs = now.getTime() - 3 * 60 * 60 * 1000;
+  const brtMs = now.getTime() - BRT_OFFSET_MS;
   return new Date(brtMs).toISOString().slice(0, 10);
 }

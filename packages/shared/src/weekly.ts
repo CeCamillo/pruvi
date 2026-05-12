@@ -1,4 +1,4 @@
-const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+import { BRT_OFFSET_MS } from "./time";
 
 export function startOfWeekBrt(now: Date): Date {
   const brtMs = now.getTime() - BRT_OFFSET_MS;
