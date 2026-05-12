@@ -113,11 +113,11 @@ describe("ShieldsRepository (integration)", () => {
       ).rejects.toThrow();
     });
 
-    it("rejects direct UPDATE attempting streak_shields_available above max (e.g. 10)", async () => {
+    it("rejects direct UPDATE attempting streak_shields_available = 2 (one above MAX = 1)", async () => {
       await insertUser("u-chk-2", { streakShieldsAvailable: 0 });
       await expect(
         db.execute(
-          sql`UPDATE "user" SET streak_shields_available = 10 WHERE id = 'u-chk-2'`,
+          sql`UPDATE "user" SET streak_shields_available = 2 WHERE id = 'u-chk-2'`,
         ),
       ).rejects.toThrow();
     });
