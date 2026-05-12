@@ -20,6 +20,7 @@ export const env = createEnv({
     APPLE_BUNDLE_ID: z.string().optional(),
     EXPO_ACCESS_TOKEN: z.string().optional(),
     ADMIN_API_TOKEN: z.string().min(16).optional(),
+    GOOGLE_PLAY_WEBHOOK_TOKEN: z.string().min(16).optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
