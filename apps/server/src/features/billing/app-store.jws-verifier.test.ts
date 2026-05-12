@@ -173,6 +173,29 @@ describe("AppStoreJwsVerifier", () => {
     expect(() => verifier.verify(jws)).toThrow(/does not match trusted/);
   });
 
+  it("throws when intermediate signature does not match root", async () => {
+    // Build two chains; splice chain B's intermediate (signed by B's root) into A's x5c.
+    // The leaf still validates against the spliced intermediate's public key (it isn't),
+    // OR the intermediate's signature won't verify against A's trusted root.
+    const chainA = chain;
+    const chainB = await makeChain();
+    // Replace position 1 (intermediate) in A's x5c with B's intermediate.
+    const tamperedX5c = [chainA.x5c[0]!, chainB.x5c[1]!, chainA.x5c[2]!];
+    const verifier = new AppStoreJwsVerifier({ rootCertPem: chainA.rootPem });
+    // Mint a JWS using A's leaf private key, with the tampered x5c in the header.
+    const header = { alg: "ES256", x5c: tamperedX5c };
+    const headerB64 = Buffer.from(JSON.stringify(header)).toString("base64url");
+    const payloadB64 = Buffer.from(JSON.stringify({ x: 1 })).toString("base64url");
+    const sig = await webcrypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      chainA.leafPrivateKey,
+      new TextEncoder().encode(`${headerB64}.${payloadB64}`),
+    );
+    const sigB64 = Buffer.from(sig).toString("base64url");
+    // Either the leaf→intermediate signature check OR the intermediate→root check must fail.
+    expect(() => verifier.verify(`${headerB64}.${payloadB64}.${sigB64}`)).toThrow(JwsVerificationError);
+  });
+
   it("throws when leaf cert is expired", async () => {
     const expiredChain = await makeChain();
     const verifier = new AppStoreJwsVerifier({

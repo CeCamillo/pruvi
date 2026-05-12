@@ -41,7 +41,7 @@ If any step fails, the decoder throws `DecoderError`. The service returns the ex
 ### 4.1 Module layout
 
 - `apps/server/src/features/billing/app-store.jws-verifier.ts` — **new**. Pure-crypto verifier:
-  - `class AppStoreJwsVerifier` with constructor `(opts: { rootCertPem: string; clockSkewMs?: number; now?: () => Date })`.
+  - `class AppStoreJwsVerifier` with constructor `(opts: { rootCertPem: string; now?: () => Date })`. (Clock-skew tolerance is not implemented in v1 — cert validity uses strict bounds.)
   - `verify(jws: string): VerifiedJws` — returns the decoded payload object on success; throws `JwsVerificationError` on any failure (subclass of `Error` distinct from `DecoderError`).
   - `static fromBundledRoot()` — constructs the verifier using the bundled Apple Root CA G3 PEM.
 - `apps/server/src/features/billing/app-store.root-ca.ts` — **new**. Exports the Apple Root CA G3 as a PEM string constant. Bundled at build time. (We do NOT fetch from Apple's CDN at boot — adds startup fragility for a value that changes once per ~25 years.)
@@ -269,6 +269,7 @@ If there's an existing app-store integration test path, ensure it constructs the
 
 ## 10. Deferred (next-phase candidates)
 
+- **ERROR-level logging for security-critical failures** (root-CA mismatch, signature mismatch). Currently all `MALFORMED_ENVELOPE` paths log at WARN. Requires surfacing the error sub-type from `JwsVerificationError`/`DecoderError` via a code field, then having the route handler branch on it. Operationally important for SIEM alerts; mechanically small.
 - **Apple OCSP revocation check** — calls Apple's OCSP responder for each cert. Adds network latency to every webhook; do this lazily with caching.
 - **Cert chain caching** — cache parsed `X509Certificate` instances keyed by their fingerprint to avoid re-parsing on hot paths.
 - **Google Pub/Sub OIDC verification** — Google's analogue; we already have JWT primitives from 2E.8.
