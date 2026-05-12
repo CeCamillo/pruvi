@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { db as DbClient } from "@pruvi/db";
 import { question } from "@pruvi/db/schema/questions";
 import { weeklySimulado, weeklySimuladoQuestion } from "@pruvi/db/schema/weekly-simulado";
@@ -231,7 +231,7 @@ export class SimuladosRepository {
         const answered = await tx
           .select({ value: count() })
           .from(weeklySimuladoQuestion)
-          .where(and(eq(weeklySimuladoQuestion.simuladoId, simuladoId), sql`${weeklySimuladoQuestion.selectedOptionIndex} IS NOT NULL`));
+          .where(and(eq(weeklySimuladoQuestion.simuladoId, simuladoId), isNotNull(weeklySimuladoQuestion.selectedOptionIndex)));
         return {
           kind: "already_answered",
           isCorrect: qr.isCorrect ?? false,
@@ -239,7 +239,7 @@ export class SimuladosRepository {
           correctOptionIndex: correctOpt,
           explanation,
           answeredCount: Number(answered[0]!.value),
-          completed: false,
+          completed: parent.completedAt !== null,
         };
       }
 

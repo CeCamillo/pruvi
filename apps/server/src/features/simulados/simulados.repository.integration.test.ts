@@ -193,6 +193,32 @@ describe("SimuladosRepository (integration)", () => {
     });
   });
 
+  describe("getOneForUser", () => {
+    it("returns null when the simulado is not owned by the requesting user", async () => {
+      await insertUser("u-gou-1a");
+      await insertUser("u-gou-1b");
+      await seedQuestions(10);
+      const { simulado } = await repo.startOrGetSimulado("u-gou-1a", "2026-05-10", 10);
+      const result = await repo.getOneForUser(simulado.id, "u-gou-1b");
+      expect(result).toBeNull();
+    });
+
+    it("returns simulado and questions with correct shape and ascending position ordering for the owner", async () => {
+      await insertUser("u-gou-2");
+      await seedQuestions(10);
+      const questionsCount = 10;
+      const { simulado } = await repo.startOrGetSimulado("u-gou-2", "2026-05-10", questionsCount);
+      const result = await repo.getOneForUser(simulado.id, "u-gou-2");
+      expect(result).not.toBeNull();
+      expect(result!.simulado.id).toBe(simulado.id);
+      expect(result!.questions.length).toBe(questionsCount);
+      // Positions must be strictly ascending from 0
+      for (let i = 0; i < result!.questions.length; i++) {
+        expect(result!.questions[i]!.position).toBe(i);
+      }
+    });
+  });
+
   describe("forceComplete", () => {
     it("sets completed_at when not yet completed", async () => {
       await insertUser("u-fc-1");
