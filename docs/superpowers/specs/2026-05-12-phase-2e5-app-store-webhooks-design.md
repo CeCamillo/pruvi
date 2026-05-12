@@ -1,6 +1,6 @@
 # Phase 2E.5 — Billing Webhooks: App Store Server Notifications V2 (Design Spec)
 
-**Status:** v2 (post Gate A: URL-path token instead of header, dedicated applyAppStoreEvent + processGooglePlayEnvelope rename, ONE_TIME_CHARGE no-op, DID_FAIL_TO_RENEW → on_hold)
+**Status:** v3 (post Gate B: on_hold_keep_entitlement variant explicit in AppStoreMappedAction)
 **Date:** 2026-05-12
 **Branch:** `feature/phase-2e5-app-store-webhooks`
 **Builds on:** Phase 2E.4 (Google Play webhooks) — same `subscription`/`billing_event` schema, same `UltraService`, same multi-sub guards.
@@ -123,7 +123,8 @@ type DecodedAppStoreEvent =
 type AppStoreMappedAction =
   | { kind: "activate"; expiresDate: Date }    // SUBSCRIBED, DID_RENEW, REFUND_REVERSED
   | { kind: "in_grace" }                        // DID_FAIL_TO_RENEW + GRACE_PERIOD
-  | { kind: "cancel_keep_entitlement" }         // DID_FAIL_TO_RENEW (other), AUTO_RENEW_DISABLED
+  | { kind: "cancel_keep_entitlement" }         // DID_CHANGE_RENEWAL_STATUS:AUTO_RENEW_DISABLED (user-initiated)
+  | { kind: "on_hold_keep_entitlement" }        // DID_FAIL_TO_RENEW (no GRACE_PERIOD subtype) — billing failure, not user choice
   | { kind: "expire" }                          // EXPIRED, GRACE_PERIOD_EXPIRED
   | { kind: "revoke" }                          // REFUND, REVOKE
   | { kind: "noop" };
@@ -157,6 +158,7 @@ The existing `BillingService.applyDecodedEvent(decoded: DecodedGooglePlayEvent, 
   - `"activate"` → newStatus = `"active"`, newPeriodEnd = `mappedAction.expiresDate`, `ultraEffect = grant(mappedAction.expiresDate)`.
   - `"in_grace"` → newStatus = `"in_grace"`, keep period end, `ultraEffect = noop`.
   - `"cancel_keep_entitlement"` → newStatus = `"canceled"`, keep period end, `ultraEffect = noop`.
+  - `"on_hold_keep_entitlement"` → newStatus = `"on_hold"`, keep period end, `ultraEffect = noop`.
   - `"expire"` → newStatus = `"expired"`, keep period end, `ultraEffect = revoke`.
   - `"revoke"` → newStatus = `"revoked"`, keep period end, `ultraEffect = revoke`.
   - `"noop"` → no state change, `ultraEffect = noop`.
