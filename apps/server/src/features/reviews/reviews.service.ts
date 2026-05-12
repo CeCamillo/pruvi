@@ -7,6 +7,7 @@ import {
   type QualityScore,
   type Difficulty,
 } from "@pruvi/shared";
+import type { FastifyBaseLogger } from "fastify";
 import type { AppError } from "../../utils/errors";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import type { ReviewsRepository } from "./reviews.repository";
@@ -20,6 +21,7 @@ export class ReviewsService {
     private livesRepo: LivesRepository,
     private dispatcher?: Dispatcher,
     private friendshipsRepo?: FriendshipsRepository,
+    private logger?: FastifyBaseLogger,
   ) {}
 
   /** Record an answer to a question */
@@ -94,7 +96,7 @@ export class ReviewsService {
     // 6d. Fire-and-forget overtaken notification hook
     if (xpAwarded > 0 && this.dispatcher && this.friendshipsRepo) {
       void this.maybeNotifyOvertakenFriends(userId, xpAwarded).catch((e) => {
-        console.error({ err: e, userId }, "overtaken notification dispatch failed");
+        this.logger?.error({ err: e, userId }, "overtaken notification dispatch failed");
       });
     }
 
