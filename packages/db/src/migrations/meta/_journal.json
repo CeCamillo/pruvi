@@ -71,6 +71,13 @@
       "when": 1778584840941,
       "tag": "0009_marvelous_johnny_blaze",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778599774073,
+      "tag": "0010_glamorous_morlocks",
+      "breakpoints": true
     }
   ]
 }

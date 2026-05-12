@@ -63,7 +63,8 @@ export async function setupTestDb() {
 export async function cleanupTestDb() {
   const db = getTestDb();
   await db.execute(sql`
-    TRUNCATE TABLE weekly_simulado_question, weekly_simulado,
+    TRUNCATE TABLE billing_event, subscription,
+      weekly_simulado_question, weekly_simulado,
       push_token, review_log, daily_session, streak_shield_usage,
       question, subtopic, topic, subject,
       account, session, verification, "user" CASCADE

@@ -14,6 +14,7 @@ import { invitationsRoutes, friendshipsRoutes, rankingRoutes } from "./features/
 import { ultraRoutes } from "./features/ultra/ultra.route";
 import { shieldsRoutes } from "./features/shields/shields.route";
 import { simuladosRoutes } from "./features/simulados";
+import { billingRoutes } from "./features/billing";
 import { livesRoutes } from "./features/lives";
 import { onboardingRoutes } from "./features/onboarding";
 import { progressRoutes } from "./features/progress";
@@ -90,6 +91,7 @@ export async function buildApp() {
   await app.register(ultraRoutes);
   await app.register(shieldsRoutes);
   await app.register(simuladosRoutes);
+  await app.register(billingRoutes);
 
   // Health check — verifies DB connectivity for ALB
   app.get("/health", async (_request, reply) => {
