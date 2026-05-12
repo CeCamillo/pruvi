@@ -39,7 +39,7 @@ beforeEach(() => {
   mockRepo.findLatestReview.mockResolvedValue(null);
   mockRepo.insertReview.mockResolvedValue(undefined);
   mockRepo.awardXp.mockResolvedValue(undefined);
-  mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null });
+  mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null, isUltra: false });
   mockLivesRepo.tryDecrement.mockResolvedValue({ ok: true, livesAfter: 4, lastRegenAt: null });
 });
 
@@ -68,7 +68,7 @@ describe("ReviewsService.answerQuestion", () => {
   });
 
   it("wrong answer: returns correct=false, quality=1, xpAwarded=0, lives decremented by 1", async () => {
-    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null });
+    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null, isUltra: false });
     mockLivesRepo.tryDecrement.mockResolvedValue({ ok: true, livesAfter: 4, lastRegenAt: null });
 
     const result = await service.answerQuestion(USER_ID, QUESTION_ID, 0);
@@ -88,7 +88,7 @@ describe("ReviewsService.answerQuestion", () => {
   });
 
   it("wrong answer with 0 lives: tryDecrement returns ok:false → ValidationError", async () => {
-    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 0, lastRegenAt: new Date() });
+    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 0, lastRegenAt: new Date(), isUltra: false });
     mockLivesRepo.tryDecrement.mockResolvedValue({ ok: false });
 
     const result = await service.answerQuestion(USER_ID, QUESTION_ID, 0);
@@ -100,7 +100,7 @@ describe("ReviewsService.answerQuestion", () => {
   });
 
   it("correct answer: tryDecrement never called; livesRemaining reflects materialized value", async () => {
-    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 3, lastRegenAt: new Date() });
+    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 3, lastRegenAt: new Date(), isUltra: false });
 
     const result = await service.answerQuestion(USER_ID, QUESTION_ID, 2);
 
@@ -131,7 +131,7 @@ describe("ReviewsService.answerQuestion", () => {
 
     vi.clearAllMocks();
     mockRepo.findQuestionById.mockResolvedValue(makeQuestion());
-    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null });
+    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null, isUltra: false });
     mockRepo.insertReview.mockResolvedValue(undefined);
     mockRepo.awardXp.mockResolvedValue(undefined);
 
@@ -209,7 +209,7 @@ describe("completeAnswer — overtaken notification hook", () => {
     mockRepo.insertReview.mockResolvedValue(undefined);
     mockRepo.awardXp.mockResolvedValue(undefined);
     mockRepo.findUserName = vi.fn().mockResolvedValue({ name: "Ana" });
-    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null });
+    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null, isUltra: false });
     mockLivesRepo.tryDecrement.mockResolvedValue({ ok: true, livesAfter: 4, lastRegenAt: null });
 
     mockFriendshipsRepo.getWeeklyXp.mockResolvedValue(50);
