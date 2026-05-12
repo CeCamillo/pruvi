@@ -31,7 +31,7 @@ export async function createTestDb() {
       is_ultra BOOLEAN NOT NULL DEFAULT false,
       ultra_expires_at TIMESTAMP,
       CONSTRAINT user_ultra_expiry_chk CHECK (ultra_expires_at IS NULL OR is_ultra = true),
-      streak_shields_available INTEGER NOT NULL DEFAULT 0 CONSTRAINT user_streak_shields_chk CHECK (streak_shields_available >= 0 AND streak_shields_available <= 3),
+      streak_shields_available INTEGER NOT NULL DEFAULT 0 CONSTRAINT user_streak_shields_chk CHECK (streak_shields_available >= 0 AND streak_shields_available <= 1),
       last_shield_grant_at TIMESTAMP,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()

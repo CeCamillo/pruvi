@@ -5,7 +5,7 @@ ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "last_shield_grant_at" timestamp;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'user_streak_shields_chk') THEN
     ALTER TABLE "user" ADD CONSTRAINT "user_streak_shields_chk"
-      CHECK ("streak_shields_available" >= 0 AND "streak_shields_available" <= 3);
+      CHECK ("streak_shields_available" >= 0 AND "streak_shields_available" <= 1);
   END IF;
 END $$;
 --> statement-breakpoint
