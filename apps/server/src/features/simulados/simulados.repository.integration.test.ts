@@ -113,4 +113,112 @@ describe("SimuladosRepository (integration)", () => {
       expect(b.created).toBe(false);
     });
   });
+
+  describe("recordAnswer", () => {
+    it("records first answer, increments correct_count on correct, returns correct outcome", async () => {
+      await insertUser("u-ans-1");
+      await seedQuestions(35);
+      const { simulado, questions } = await repo.startOrGetSimulado("u-ans-1", "2026-05-10", 35);
+      const q = questions[0]!;
+      const correctOpt = q.correctOptionIndex;
+      const result = await repo.recordAnswer(simulado.id, "u-ans-1", q.questionId, correctOpt);
+      expect(result.kind).toBe("recorded");
+      if (result.kind === "recorded") {
+        expect(result.isCorrect).toBe(true);
+        expect(result.completed).toBe(false);
+        expect(result.answeredCount).toBe(1);
+      }
+    });
+
+    it("first-answer-wins idempotency: second answer with different option returns original outcome", async () => {
+      await insertUser("u-ans-2");
+      await seedQuestions(35);
+      const { simulado, questions } = await repo.startOrGetSimulado("u-ans-2", "2026-05-10", 35);
+      const q = questions[0]!;
+      const correctOpt = q.correctOptionIndex;
+      const wrongOpt = (correctOpt + 1) % 4;
+      await repo.recordAnswer(simulado.id, "u-ans-2", q.questionId, correctOpt);
+      const second = await repo.recordAnswer(simulado.id, "u-ans-2", q.questionId, wrongOpt);
+      expect(second.kind).toBe("already_answered");
+      if (second.kind === "already_answered") {
+        expect(second.isCorrect).toBe(true);
+        expect(second.selectedOptionIndex).toBe(correctOpt);
+      }
+    });
+
+    it("auto-completes when the last unanswered question is answered", async () => {
+      await insertUser("u-ans-3");
+      await seedQuestions(5);
+      const { simulado, questions } = await repo.startOrGetSimulado("u-ans-3", "2026-05-10", 5);
+      for (let i = 0; i < 4; i++) {
+        const q = questions[i]!;
+        await repo.recordAnswer(simulado.id, "u-ans-3", q.questionId, q.correctOptionIndex);
+      }
+      const final = await repo.recordAnswer(simulado.id, "u-ans-3", questions[4]!.questionId, questions[4]!.correctOptionIndex);
+      expect(final.kind).toBe("recorded");
+      if (final.kind === "recorded") {
+        expect(final.completed).toBe(true);
+        expect(final.answeredCount).toBe(5);
+      }
+    });
+
+    it("returns kind='not_found' when simulado doesn't exist or isn't owned by user", async () => {
+      await insertUser("u-ans-4a");
+      await insertUser("u-ans-4b");
+      await seedQuestions(35);
+      const { simulado, questions } = await repo.startOrGetSimulado("u-ans-4a", "2026-05-10", 35);
+      const result = await repo.recordAnswer(simulado.id, "u-ans-4b", questions[0]!.questionId, 0);
+      expect(result.kind).toBe("not_found");
+    });
+
+    it("returns kind='bad_question' when questionId doesn't belong to this simulado", async () => {
+      await insertUser("u-ans-5");
+      await seedQuestions(40);
+      const { simulado, questions } = await repo.startOrGetSimulado("u-ans-5", "2026-05-10", 35);
+      const includedIds = new Set(questions.map((q) => q.questionId));
+      // Find a question NOT in the simulado
+      const allQuestions = await db.select({ id: question.id }).from(question);
+      const outsider = allQuestions.find((q) => !includedIds.has(q.id))!;
+      const result = await repo.recordAnswer(simulado.id, "u-ans-5", outsider.id, 0);
+      expect(result.kind).toBe("bad_question");
+    });
+
+    it("returns kind='already_completed' when simulado is already finalized", async () => {
+      await insertUser("u-ans-6");
+      await seedQuestions(35);
+      const { simulado, questions } = await repo.startOrGetSimulado("u-ans-6", "2026-05-10", 35);
+      await repo.forceComplete(simulado.id, "u-ans-6");
+      const result = await repo.recordAnswer(simulado.id, "u-ans-6", questions[0]!.questionId, 0);
+      expect(result.kind).toBe("already_completed");
+    });
+  });
+
+  describe("forceComplete", () => {
+    it("sets completed_at when not yet completed", async () => {
+      await insertUser("u-fc-1");
+      await seedQuestions(35);
+      const { simulado } = await repo.startOrGetSimulado("u-fc-1", "2026-05-10", 35);
+      const res = await repo.forceComplete(simulado.id, "u-fc-1");
+      expect(res.kind).toBe("completed");
+      if (res.kind === "completed") expect(res.completedAt).toBeInstanceOf(Date);
+    });
+
+    it("is idempotent on already-completed simulado", async () => {
+      await insertUser("u-fc-2");
+      await seedQuestions(35);
+      const { simulado } = await repo.startOrGetSimulado("u-fc-2", "2026-05-10", 35);
+      await repo.forceComplete(simulado.id, "u-fc-2");
+      const res = await repo.forceComplete(simulado.id, "u-fc-2");
+      expect(res.kind).toBe("completed");
+    });
+
+    it("returns not_found for unowned simulado", async () => {
+      await insertUser("u-fc-3a");
+      await insertUser("u-fc-3b");
+      await seedQuestions(35);
+      const { simulado } = await repo.startOrGetSimulado("u-fc-3a", "2026-05-10", 35);
+      const res = await repo.forceComplete(simulado.id, "u-fc-3b");
+      expect(res.kind).toBe("not_found");
+    });
+  });
 });

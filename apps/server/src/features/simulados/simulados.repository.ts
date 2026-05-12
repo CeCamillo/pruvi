@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import type { db as DbClient } from "@pruvi/db";
 import { question } from "@pruvi/db/schema/questions";
 import { weeklySimulado, weeklySimuladoQuestion } from "@pruvi/db/schema/weekly-simulado";
@@ -28,6 +28,17 @@ export type SimuladoQuestionRow = {
   selectedOptionIndex: number | null;
   isCorrect: boolean | null;
 };
+
+export type RecordAnswerResult =
+  | { kind: "recorded"; isCorrect: boolean; correctOptionIndex: number; explanation: string | null; answeredCount: number; completed: boolean }
+  | { kind: "already_answered"; isCorrect: boolean; selectedOptionIndex: number; correctOptionIndex: number; explanation: string | null; answeredCount: number; completed: boolean }
+  | { kind: "not_found" }
+  | { kind: "bad_question" }
+  | { kind: "already_completed" };
+
+export type ForceCompleteResult =
+  | { kind: "completed"; completedAt: Date }
+  | { kind: "not_found" };
 
 export class SimuladosRepository {
   constructor(private db: Db) {}
@@ -170,6 +181,128 @@ export class SimuladosRepository {
       questionsCount: row.questionsCount,
       correctCount: row.correctCount,
     };
+  }
+
+  /**
+   * Race-safe under Read Committed via `SELECT ... FOR UPDATE` on the parent
+   * simulado row. Serializes concurrent answers on the same simulado to
+   * eliminate auto-completion races. First-answer-wins idempotency on the
+   * question row via WHERE selected_option_index IS NULL predicate.
+   */
+  async recordAnswer(simuladoId: number, userId: string, questionId: number, selectedOptionIndex: number): Promise<RecordAnswerResult> {
+    return await this.db.transaction(async (tx) => {
+      // 1. Lock parent row using Drizzle's typed .for("update"). Check ownership and completion.
+      const lockedRows = await tx
+        .select({
+          id: weeklySimulado.id,
+          userId: weeklySimulado.userId,
+          completedAt: weeklySimulado.completedAt,
+          correctCount: weeklySimulado.correctCount,
+          questionsCount: weeklySimulado.questionsCount,
+        })
+        .from(weeklySimulado)
+        .where(eq(weeklySimulado.id, simuladoId))
+        .for("update")
+        .limit(1);
+      const parent = lockedRows[0];
+      if (!parent || parent.userId !== userId) return { kind: "not_found" };
+      if (parent.completedAt !== null) return { kind: "already_completed" };
+
+      // 2. Look up the question within this simulado.
+      const qRow = await tx
+        .select({
+          selectedOptionIndex: weeklySimuladoQuestion.selectedOptionIndex,
+          isCorrect: weeklySimuladoQuestion.isCorrect,
+          correctOptionIndex: question.correctOptionIndex,
+          explanation: question.explanation,
+        })
+        .from(weeklySimuladoQuestion)
+        .innerJoin(question, eq(weeklySimuladoQuestion.questionId, question.id))
+        .where(and(eq(weeklySimuladoQuestion.simuladoId, simuladoId), eq(weeklySimuladoQuestion.questionId, questionId)))
+        .limit(1);
+      const qr = qRow[0];
+      if (!qr) return { kind: "bad_question" };
+
+      const correctOpt = qr.correctOptionIndex;
+      const explanation = qr.explanation;
+
+      // 3. If already answered, return the recorded outcome (first answer wins).
+      if (qr.selectedOptionIndex !== null) {
+        const answered = await tx
+          .select({ value: count() })
+          .from(weeklySimuladoQuestion)
+          .where(and(eq(weeklySimuladoQuestion.simuladoId, simuladoId), sql`${weeklySimuladoQuestion.selectedOptionIndex} IS NOT NULL`));
+        return {
+          kind: "already_answered",
+          isCorrect: qr.isCorrect ?? false,
+          selectedOptionIndex: qr.selectedOptionIndex,
+          correctOptionIndex: correctOpt,
+          explanation,
+          answeredCount: Number(answered[0]!.value),
+          completed: false,
+        };
+      }
+
+      // 4. Record the new answer (conditional on IS NULL to be race-safe).
+      const isCorrect = selectedOptionIndex === correctOpt;
+      await tx
+        .update(weeklySimuladoQuestion)
+        .set({ selectedOptionIndex, isCorrect, answeredAt: new Date() })
+        .where(and(
+          eq(weeklySimuladoQuestion.simuladoId, simuladoId),
+          eq(weeklySimuladoQuestion.questionId, questionId),
+          isNull(weeklySimuladoQuestion.selectedOptionIndex),
+        ));
+
+      // 5. Increment correct_count if correct.
+      if (isCorrect) {
+        await tx
+          .update(weeklySimulado)
+          .set({ correctCount: sql`${weeklySimulado.correctCount} + 1` })
+          .where(eq(weeklySimulado.id, simuladoId));
+      }
+
+      // 6. Count remaining unanswered. Because parent is FOR UPDATE-locked, no
+      //    other answer transaction can have committed since step 1.
+      const unanswered = await tx
+        .select({ value: count() })
+        .from(weeklySimuladoQuestion)
+        .where(and(eq(weeklySimuladoQuestion.simuladoId, simuladoId), isNull(weeklySimuladoQuestion.selectedOptionIndex)));
+      const remaining = Number(unanswered[0]!.value);
+      let completed = false;
+      if (remaining === 0) {
+        await tx
+          .update(weeklySimulado)
+          .set({ completedAt: new Date() })
+          .where(and(eq(weeklySimulado.id, simuladoId), isNull(weeklySimulado.completedAt)));
+        completed = true;
+      }
+      const answeredCount = parent.questionsCount - remaining;
+      return { kind: "recorded", isCorrect, correctOptionIndex: correctOpt, explanation, answeredCount, completed };
+    });
+  }
+
+  async forceComplete(simuladoId: number, userId: string): Promise<ForceCompleteResult> {
+    const result = await this.db
+      .update(weeklySimulado)
+      .set({ completedAt: sql`COALESCE(${weeklySimulado.completedAt}, now())` })
+      .where(and(eq(weeklySimulado.id, simuladoId), eq(weeklySimulado.userId, userId)))
+      .returning({ completedAt: weeklySimulado.completedAt });
+    const row = result[0];
+    if (!row) return { kind: "not_found" };
+    return { kind: "completed", completedAt: row.completedAt! };
+  }
+
+  async getOneForUser(simuladoId: number, userId: string): Promise<{ simulado: SimuladoRow; questions: SimuladoQuestionRow[] } | null> {
+    const rows = await this.db
+      .select()
+      .from(weeklySimulado)
+      .where(and(eq(weeklySimulado.id, simuladoId), eq(weeklySimulado.userId, userId)))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    const questions = await this.fetchQuestionsForSimulado(row.id);
+    return { simulado: this.toSimuladoRow(row), questions };
   }
 
   private async fetchQuestionsForSimulado(simuladoId: number): Promise<SimuladoQuestionRow[]> {
