@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { setupTestDb, cleanupTestDb, teardownTestDb, getTestDb } from "../../test/db-helpers";
 import { user } from "@pruvi/db/schema/auth";
+import { eq } from "drizzle-orm";
 import { BillingRepository } from "./billing.repository";
 
 describe("BillingRepository (integration)", () => {
@@ -82,5 +83,40 @@ describe("BillingRepository (integration)", () => {
     const unprocessed = await repo.listUnprocessedEventsForToken(db, "google_play", "t-X");
     expect(unprocessed).toHaveLength(1);
     expect(unprocessed[0]!.messageId).toBe("m-a");
+  });
+
+  it("getMaxOtherActivePeriodEnd returns the LATER end across other active subs", async () => {
+    await insertUser("u-max-1");
+    const future30 = new Date(Date.now() + 30 * 86400000);
+    const future365 = new Date(Date.now() + 365 * 86400000);
+    // Create subscription A with 30-day end
+    const a = await repo.upsertLinkedSubscription(db, { userId: "u-max-1", provider: "google_play", productId: "p", token: "t-A" });
+    await repo.updateSubscriptionState(db, a.subscription.id, { status: "active", currentPeriodEnd: future30 });
+    // Create subscription B with 365-day end
+    const b = await repo.upsertLinkedSubscription(db, { userId: "u-max-1", provider: "google_play", productId: "p", token: "t-B" });
+    await repo.updateSubscriptionState(db, b.subscription.id, { status: "active", currentPeriodEnd: future365 });
+    // When excluding A, the max-other should be B's (365 days)
+    const maxOther = await repo.getMaxOtherActivePeriodEnd(db, "u-max-1", a.subscription.id);
+    expect(maxOther).not.toBeNull();
+    expect(Math.abs(maxOther!.getTime() - future365.getTime())).toBeLessThan(1000);
+  });
+
+  it("getMaxOtherActivePeriodEnd returns null when only this sub is active", async () => {
+    await insertUser("u-max-2");
+    const a = await repo.upsertLinkedSubscription(db, { userId: "u-max-2", provider: "google_play", productId: "p", token: "t-solo" });
+    await repo.updateSubscriptionState(db, a.subscription.id, { status: "active", currentPeriodEnd: new Date(Date.now() + 86400000) });
+    expect(await repo.getMaxOtherActivePeriodEnd(db, "u-max-2", a.subscription.id)).toBeNull();
+  });
+
+  it("ON DELETE SET NULL: deleting a user with linked subscriptions sets user_id to NULL", async () => {
+    await insertUser("u-cascade-1");
+    const a = await repo.upsertLinkedSubscription(db, { userId: "u-cascade-1", provider: "google_play", productId: "p", token: "t-casc" });
+    expect(a.subscription.userId).toBe("u-cascade-1");
+    // Delete the user
+    await db.delete(user).where(eq(user.id, "u-cascade-1"));
+    // Subscription row must still exist with userId = NULL
+    const after = await repo.findSubscriptionByToken(db, "google_play", "t-casc");
+    expect(after).not.toBeNull();
+    expect(after!.userId).toBeNull();
   });
 });

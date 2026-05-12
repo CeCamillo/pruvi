@@ -94,4 +94,21 @@ describe("decodeGooglePlayPubSubEnvelope", () => {
     const env = buildEnvelope({ subscriptionNotification: { notificationType: 4 } });
     expect(() => decodeGooglePlayPubSubEnvelope(env)).toThrow(DecoderError);
   });
+
+  it("decodes ALL 13 core notification types (1-13)", () => {
+    const expected: Array<[number, string]> = [
+      [1, "RECOVERED"], [2, "RENEWED"], [3, "CANCELED"], [4, "PURCHASED"],
+      [5, "ON_HOLD"], [6, "IN_GRACE_PERIOD"], [7, "RESTARTED"], [8, "PRICE_CHANGE_CONFIRMED"],
+      [9, "DEFERRED"], [10, "PAUSED"], [11, "PAUSE_SCHEDULE_CHANGED"], [12, "REVOKED"], [13, "EXPIRED"],
+    ];
+    for (const [ntype, name] of expected) {
+      const env = buildEnvelope({ subscriptionNotification: { notificationType: ntype, purchaseToken: `t-${ntype}` } });
+      const decoded = decodeGooglePlayPubSubEnvelope(env);
+      expect(decoded.kind).toBe("subscription");
+      if (decoded.kind === "subscription") {
+        expect(decoded.notificationType).toBe(ntype);
+        expect(decoded.notificationTypeName).toBe(name);
+      }
+    }
+  });
 });
