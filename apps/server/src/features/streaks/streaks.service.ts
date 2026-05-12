@@ -1,4 +1,5 @@
 import { ok, type Result } from "neverthrow";
+import { todayInBrt } from "@pruvi/shared";
 import type { AppError } from "../../utils/errors";
 import type { StreaksRepository } from "./streaks.repository";
 import type { ShieldsRepository } from "../shields/shields.repository";
@@ -47,14 +48,12 @@ export class StreaksService {
  * sorted newest-first (e.g., ["2026-03-15", "2026-03-14", "2026-03-12"]).
  */
 function computeStreaks(dates: string[]) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().slice(0, 10);
-
-  // Check if today or yesterday is in the dates (to count current streak)
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  // "Today" must be BRT-local to match the date strings the repo returns. UTC midnight
+  // would skip the user's evening between 21:00 BRT and 23:59 BRT for users in late-night
+  // sessions (00:00–03:00 UTC).
+  const now = new Date();
+  const todayStr = todayInBrt(now);
+  const yesterdayStr = todayInBrt(new Date(now.getTime() - 86_400_000));
 
   let currentStreak = 0;
   let longestStreak = 0;

@@ -1,17 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { todayInBrt } from "@pruvi/shared";
 import { StreaksService } from "./streaks.service";
 
+// BRT-local "today" — matches what the repo returns and what computeStreaks compares against.
 function todayStr() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
+  return todayInBrt(new Date());
 }
 
 function daysAgo(n: number) {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return todayInBrt(new Date(Date.now() - n * 86_400_000));
 }
 
 function createMocks(shieldsProtectedDates: string[] = []) {
