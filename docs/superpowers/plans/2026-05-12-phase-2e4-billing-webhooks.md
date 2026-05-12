@@ -10,6 +10,8 @@
 
 **Authoritative spec:** `docs/superpowers/specs/2026-05-12-phase-2e4-billing-webhooks-design.md` (v2 post Gate A).
 
+**Plan revision:** v2 post Gate B — webhookGuard now throws AppError (was: plain Error → 500); multi-subscription GRANT guard added (was: only REVOKE guard); partial index `billing_event_unprocessed_idx` added to schema; concrete test code provided for the two highest-risk cases (multi-sub guard, link-time replay); Drizzle text-enum CHECK-constraint absence acknowledged.
+
 ---
 
 ## Task 1 — Env, shared schemas, notification-type enum
@@ -174,7 +176,7 @@ git commit -m "feat(shared,env): billing module — providers, statuses, google 
 Create `packages/db/src/schema/billing.ts`:
 
 ```ts
-import { relations } from "drizzle-orm";
+import { relations, isNull } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 
@@ -217,6 +219,9 @@ export const billingEvent = pgTable(
   (t) => [
     uniqueIndex("billing_event_provider_message_uq").on(t.provider, t.messageId),
     index("billing_event_token_idx").on(t.purchaseToken),
+    // Partial index — spec §5.2. Speeds up `listUnprocessedEventsForToken` on the
+    // link-replay hot path. Without it, that query degrades to a full scan.
+    index("billing_event_unprocessed_idx").on(t.processedAt).where(isNull(t.processedAt)),
   ],
 );
 
@@ -238,7 +243,16 @@ export * from "./billing";
 cd /Users/cesarcamillo/dev/pruvi && pnpm -F db db:generate
 ```
 
-(If the package script name differs, check `packages/db/package.json`.) Verify the generated `0010_*.sql` contains both tables with the expected constraints (CHECK for provider + status enums, UNIQUE indexes, ON DELETE SET NULL for user_id). If unrelated diffs appear, STOP and report BLOCKED.
+(If the package script name differs, check `packages/db/package.json`.) Verify the generated `0010_*.sql` contains:
+- Both `subscription` and `billing_event` tables with all columns.
+- UNIQUE indexes `subscription_provider_token_uq` and `billing_event_provider_message_uq`.
+- Plain index `subscription_user_idx`, `subscription_status_idx`, `billing_event_token_idx`.
+- Partial index `billing_event_unprocessed_idx ON billing_event (processed_at) WHERE processed_at IS NULL`.
+- `user_id` REFERENCES `"user"(id)` `ON DELETE SET NULL`.
+
+**Known Drizzle limitation:** `text("col", { enum: [...] })` is TypeScript-level only — it does NOT emit `CHECK (col IN (...))` constraints in the generated SQL. The spec describes CHECK constraints as a "safety net" but Drizzle does not generate them. Accepted gap for v1; application-level enum validation (Zod schemas in `@pruvi/shared`) is the primary guard. If a future hardening pass wants real DB CHECKs, they must be added by manually editing the migration or via a follow-up SQL migration. Do NOT add CHECK constraints manually now — keep the migration as drizzle-kit emits it for reproducibility.
+
+If unrelated diffs appear, STOP and report BLOCKED.
 
 - [ ] **Step 2.4: Update `cleanupTestDb`**
 
@@ -688,6 +702,31 @@ export class BillingRepository {
     return rows.length > 0;
   }
 
+  /** Returns the maximum `current_period_end` across all OTHER active/in_grace subscriptions for this user.
+   *  Used by the multi-subscription GRANT guard (spec §7.2): when granting Ultra, we must use
+   *  MAX(allActive.currentPeriodEnd) so a short renewal doesn't truncate a longer active plan. */
+  async getMaxOtherActivePeriodEnd(
+    tx: DbOrTx,
+    userId: string,
+    excludeSubscriptionId: number,
+  ): Promise<Date | null> {
+    const rows = await tx
+      .select({ end: subscription.currentPeriodEnd })
+      .from(subscription)
+      .where(
+        and(
+          eq(subscription.userId, userId),
+          ne(subscription.id, excludeSubscriptionId),
+          sql`${subscription.status} IN ('active','in_grace')`,
+        ),
+      );
+    let max: Date | null = null;
+    for (const r of rows) {
+      if (r.end && (!max || r.end > max)) max = r.end;
+    }
+    return max;
+  }
+
   private toSubscription(r: typeof subscription.$inferSelect): SubscriptionRow {
     return {
       id: r.id,
@@ -845,9 +884,13 @@ import type { db as DbClient } from "@pruvi/db";
 
 type Db = typeof DbClient;
 
-/** Effect to apply AFTER the transaction commits (two-phase pattern per spec §7.6). */
+/** Effect to apply AFTER the transaction commits (two-phase pattern per spec §7.6).
+ *  Both `grant` and `revoke` variants carry `excludeSubscriptionId` so the post-commit
+ *  step can consult OTHER active subscriptions (the multi-sub guards from §7.2):
+ *   - grant: final expiry = MAX(effect.expiresAt, otherActive.currentPeriodEnd) — never truncates a longer plan.
+ *   - revoke: revoke only if no other active subscription exists. */
 type PostCommitUltraEffect =
-  | { kind: "grant"; userId: string; expiresAt: Date }
+  | { kind: "grant"; userId: string; expiresAt: Date; excludeSubscriptionId: number }
   | { kind: "revoke_if_no_other_active"; userId: string; excludeSubscriptionId: number }
   | { kind: "none" };
 
@@ -994,7 +1037,9 @@ export class BillingService {
     const defaultEnd = new Date(now.getTime() + DEFAULT_SUBSCRIPTION_PERIOD_MS);
     const name = decoded.notificationTypeName;
     const grant = (end: Date): PostCommitUltraEffect =>
-      sub.userId !== null ? { kind: "grant", userId: sub.userId, expiresAt: end } : { kind: "none" };
+      sub.userId !== null
+        ? { kind: "grant", userId: sub.userId, expiresAt: end, excludeSubscriptionId: sub.id }
+        : { kind: "none" };
     const revoke = (): PostCommitUltraEffect =>
       sub.userId !== null
         ? { kind: "revoke_if_no_other_active", userId: sub.userId, excludeSubscriptionId: sub.id }
@@ -1032,9 +1077,18 @@ export class BillingService {
 
   private async applyUltraEffect(effect: PostCommitUltraEffect): Promise<void> {
     if (effect.kind === "grant") {
-      await this.ultra.grant(effect.userId, effect.expiresAt);
+      // Multi-sub GRANT guard (spec §7.2): the final expiry must be the MAX across this
+      // subscription's expiry and the currentPeriodEnd of any other active/in_grace subscriptions
+      // for the same user. A renewal of a short plan must NEVER truncate a long active plan.
+      const otherMax = await this.repo.getMaxOtherActivePeriodEnd(
+        this.db, effect.userId, effect.excludeSubscriptionId,
+      );
+      const finalEnd = otherMax && otherMax > effect.expiresAt ? otherMax : effect.expiresAt;
+      await this.ultra.grant(effect.userId, finalEnd);
     } else if (effect.kind === "revoke_if_no_other_active") {
-      const hasOther = await this.repo.hasOtherActiveSubscription(this.db, effect.userId, effect.excludeSubscriptionId);
+      const hasOther = await this.repo.hasOtherActiveSubscription(
+        this.db, effect.userId, effect.excludeSubscriptionId,
+      );
       if (!hasOther) await this.ultra.revoke(effect.userId);
     }
   }
@@ -1043,24 +1097,182 @@ export class BillingService {
 
 - [ ] **Step 5.2: Failing service tests (mocked repo + ultra)**
 
-Create `apps/server/src/features/billing/billing.service.test.ts`. Cover:
-1. **PURCHASED webhook on a linked subscription**: state→active, currentPeriodEnd≈now+30d, ultra.grant called with that expiry.
-2. **PURCHASED on no-existing-subscription (pre-link)**: creates orphan, applies state, NO grant called.
-3. **EXPIRED on active with NO other active subscriptions**: state→expired, ultra.revoke called.
-4. **EXPIRED on active WITH another active subscription**: state→expired, ultra.revoke NOT called (multi-sub guard).
-5. **CANCELED**: state→canceled, no Ultra change.
-6. **Duplicate messageId**: second call returns ok with no effect; ultra.grant NOT called second time.
-7. **Unknown notificationType**: audit row inserted with `UNKNOWN_99` type, no state change, no grant/revoke.
-8. **`linkGooglePlayPurchase` happy path on token already owned by same user**: returns existing subscription, no error.
-9. **`linkGooglePlayPurchase` on token owned by other user**: throws ConflictError.
-10. **`linkGooglePlayPurchase` after pre-link webhook**: claims orphan, replays parked PURCHASED event, ultra.grant called.
+Create `apps/server/src/features/billing/billing.service.test.ts`. Use the shared mock harness below, then implement all 10 cases. The two MUST-be-fleshed-out cases (multi-sub guard, link-time replay) are provided fully; the others follow the same shape.
 
-For each, build a `buildSut` helper similar to Phase 2E.3's service test pattern, mocking `BillingRepository` and `UltraService`. The service's `db` reference can be a stub since the mocked repo intercepts all calls — but the service does call `this.db.transaction(async (tx) => ...)`. Mock the transaction to immediately invoke the callback with `tx = mockRepo` (or use a thin `txRunner` injection — but staying consistent with existing pattern, mock `db.transaction` to call the callback with a stub).
-
-The mocked db pattern:
 ```ts
-const db = { transaction: vi.fn(async (cb: (tx: any) => any) => cb(mockTx)) };
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { BillingService } from "./billing.service";
+import type { BillingRepository, SubscriptionRow, BillingEventRow } from "./billing.repository";
+import type { UltraService } from "../ultra/ultra.service";
+import type { db as DbClient } from "@pruvi/db";
+
+type Mocked<T> = { [K in keyof T]: T[K] extends (...a: infer A) => infer R ? ReturnType<typeof vi.fn<(...a: A) => R>> : T[K] };
+
+function buildSut(opts: {
+  insertEvent?: BillingEventRow | null;
+  findSubscription?: SubscriptionRow | null;
+  createOrphan?: SubscriptionRow;
+  updateState?: SubscriptionRow;
+  listUnprocessed?: BillingEventRow[];
+  hasOtherActive?: boolean;
+  maxOtherEnd?: Date | null;
+  upsertLinked?: { subscription: SubscriptionRow; created: boolean };
+  claimOrphan?: SubscriptionRow;
+} = {}) {
+  const repo = {
+    insertEvent: vi.fn().mockResolvedValue(opts.insertEvent ?? { id: 1, provider: "google_play", messageId: "m1", eventType: "PURCHASED", purchaseToken: "tok", payload: {}, receivedAt: new Date(), processedAt: null, processingError: null }),
+    findSubscriptionByToken: vi.fn().mockResolvedValue(opts.findSubscription ?? null),
+    createOrphanSubscription: vi.fn().mockResolvedValue(opts.createOrphan ?? { id: 10, userId: null, provider: "google_play", productId: "", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: null }),
+    upsertLinkedSubscription: vi.fn().mockResolvedValue(opts.upsertLinked ?? { subscription: { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() }, created: true }),
+    claimOrphanSubscription: vi.fn().mockResolvedValue(opts.claimOrphan ?? { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() }),
+    updateSubscriptionState: vi.fn().mockResolvedValue(opts.updateState ?? { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(Date.now() + 30 * 86400000), linkedAt: new Date() }),
+    markEventProcessed: vi.fn().mockResolvedValue(undefined),
+    listUnprocessedEventsForToken: vi.fn().mockResolvedValue(opts.listUnprocessed ?? []),
+    hasOtherActiveSubscription: vi.fn().mockResolvedValue(opts.hasOtherActive ?? false),
+    getMaxOtherActivePeriodEnd: vi.fn().mockResolvedValue(opts.maxOtherEnd ?? null),
+  } as unknown as Mocked<BillingRepository>;
+  const ultra = {
+    grant: vi.fn().mockResolvedValue(undefined),
+    revoke: vi.fn().mockResolvedValue(undefined),
+  } as unknown as Mocked<UltraService>;
+  const db = {
+    transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => cb(repo)),
+  } as unknown as typeof DbClient;
+  const service = new BillingService(db, repo as unknown as BillingRepository, ultra as unknown as UltraService);
+  return { service, repo, ultra, db };
+}
+
+function buildEnvelope(notificationType: number, purchaseToken = "tok", messageId = "msg-1") {
+  const inner = { packageName: "com.pruvi.app", subscriptionNotification: { notificationType, purchaseToken, version: "1.0" } };
+  return { message: { messageId, publishTime: "2026-05-12T10:00:00Z", data: Buffer.from(JSON.stringify(inner)).toString("base64") } };
+}
+
+describe("BillingService", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Case 1
+  it("PURCHASED on linked subscription: active + grant called with ~now+30d", async () => {
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked });
+    const r = await service.processWebhookEnvelope(buildEnvelope(4));
+    expect(r.isOk()).toBe(true);
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "active" }));
+    expect(ultra.grant).toHaveBeenCalledTimes(1);
+    const grantedExpiry = ultra.grant.mock.calls[0]![1] as Date;
+    const expected = Date.now() + 30 * 86400000;
+    expect(Math.abs(grantedExpiry.getTime() - expected)).toBeLessThan(60_000);
+  });
+
+  // Case 2
+  it("PURCHASED with NO existing subscription: orphan created, NO grant", async () => {
+    const { service, ultra, repo } = buildSut({ findSubscription: null });
+    await service.processWebhookEnvelope(buildEnvelope(4));
+    expect(repo.createOrphanSubscription).toHaveBeenCalled();
+    expect(ultra.grant).not.toHaveBeenCalled();
+  });
+
+  // Case 3
+  it("EXPIRED with no other active subs: revoke called", async () => {
+    const active: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
+    const { service, ultra } = buildSut({ findSubscription: active, hasOtherActive: false });
+    await service.processWebhookEnvelope(buildEnvelope(13));
+    expect(ultra.revoke).toHaveBeenCalledWith("u1");
+  });
+
+  // Case 4 — MULTI-SUB REVOKE GUARD (critical)
+  it("EXPIRED with another active subscription: revoke NOT called (multi-sub guard)", async () => {
+    const active: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
+    const { service, ultra, repo } = buildSut({ findSubscription: active, hasOtherActive: true });
+    await service.processWebhookEnvelope(buildEnvelope(13));
+    expect(repo.hasOtherActiveSubscription).toHaveBeenCalledWith(expect.anything(), "u1", 10);
+    expect(ultra.revoke).not.toHaveBeenCalled();
+  });
+
+  // Bonus: MULTI-SUB GRANT GUARD (also critical)
+  it("PURCHASED with another active sub having LATER period end: grant uses MAX expiry, not now+30d", async () => {
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() };
+    const farFuture = new Date(Date.now() + 365 * 86400000); // 1 year out
+    const { service, ultra } = buildSut({ findSubscription: linked, maxOtherEnd: farFuture });
+    await service.processWebhookEnvelope(buildEnvelope(4));
+    expect(ultra.grant).toHaveBeenCalledWith("u1", farFuture);
+  });
+
+  // Case 5
+  it("CANCELED: state=canceled, no Ultra change", async () => {
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked });
+    await service.processWebhookEnvelope(buildEnvelope(3));
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "canceled" }));
+    expect(ultra.grant).not.toHaveBeenCalled();
+    expect(ultra.revoke).not.toHaveBeenCalled();
+  });
+
+  // Case 6
+  it("Duplicate messageId: second call no-op (insertEvent returns null)", async () => {
+    const { service, ultra } = buildSut({ insertEvent: null });
+    await service.processWebhookEnvelope(buildEnvelope(4));
+    expect(ultra.grant).not.toHaveBeenCalled();
+  });
+
+  // Case 7
+  it("Unknown notificationType: UNKNOWN_99 event recorded, no state mutation", async () => {
+    const { service, ultra, repo } = buildSut();
+    await service.processWebhookEnvelope(buildEnvelope(99));
+    expect(repo.insertEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "UNKNOWN_99" }));
+    expect(repo.updateSubscriptionState).not.toHaveBeenCalled();
+    expect(ultra.grant).not.toHaveBeenCalled();
+  });
+
+  // Case 8
+  it("link: same user re-call returns existing subscription, no error", async () => {
+    const existing: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: null, linkedAt: new Date() };
+    const { service } = buildSut({ findSubscription: existing });
+    const r = await service.linkGooglePlayPurchase("u1", { purchaseToken: "tok", productId: "p" });
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) expect(r.value.subscription.id).toBe(10);
+  });
+
+  // Case 9
+  it("link: token owned by other user throws ConflictError", async () => {
+    const owned: SubscriptionRow = { id: 10, userId: "OTHER", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: null, linkedAt: new Date() };
+    const { service } = buildSut({ findSubscription: owned });
+    await expect(service.linkGooglePlayPurchase("u1", { purchaseToken: "tok", productId: "p" })).rejects.toThrow(/PURCHASE_TOKEN_OWNED/);
+  });
+
+  // Case 10 — LINK-TIME REPLAY (critical)
+  it("link after pre-link webhook: claims orphan, replays parked PURCHASED, ultra.grant called", async () => {
+    const orphan: SubscriptionRow = { id: 10, userId: null, provider: "google_play", productId: "", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: null };
+    const claimed: SubscriptionRow = { ...orphan, userId: "u1", productId: "p", linkedAt: new Date() };
+    const parkedEvent: BillingEventRow = {
+      id: 5,
+      provider: "google_play",
+      messageId: "m-parked",
+      eventType: "PURCHASED",
+      purchaseToken: "tok",
+      payload: { kind: "subscription", messageId: "m-parked", notificationType: 4, notificationTypeName: "PURCHASED", purchaseToken: "tok", publishTime: "", packageName: "", eventTimeMillis: "" } as unknown as Record<string, unknown>,
+      receivedAt: new Date(Date.now() - 60_000),
+      processedAt: null,
+      processingError: null,
+    };
+    const afterUpdate: SubscriptionRow = { ...claimed, status: "active", currentPeriodEnd: new Date(Date.now() + 30 * 86400000) };
+
+    const { service, repo, ultra } = buildSut({ findSubscription: orphan, claimOrphan: claimed, listUnprocessed: [parkedEvent], updateState: afterUpdate });
+    // After claim, findSubscriptionByToken inside the replay loop should return the claimed row.
+    (repo.findSubscriptionByToken as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(orphan)     // first call: pre-claim
+      .mockResolvedValueOnce(claimed)    // inside replay loop: post-claim, before applyDecoded
+      .mockResolvedValueOnce(afterUpdate); // final read at end of transaction
+
+    const r = await service.linkGooglePlayPurchase("u1", { purchaseToken: "tok", productId: "p" });
+    expect(r.isOk()).toBe(true);
+    expect(repo.claimOrphanSubscription).toHaveBeenCalledWith(expect.anything(), 10, "u1", "p");
+    expect(repo.markEventProcessed).toHaveBeenCalledWith(expect.anything(), 5);
+    expect(ultra.grant).toHaveBeenCalledTimes(1);
+  });
+});
 ```
+
+The harness above is exhaustive: the implementer should drop it in verbatim and adjust mock specifics only if Drizzle's internal types force tweaks. The two critical cases (Case 4 multi-sub revoke guard, Case 10 link-time replay) and the bonus multi-sub grant guard test MUST appear with their assertions intact — those exercise the two highest-risk behaviors from Gate B.
 
 - [ ] **Step 5.3: Run tests, commit**
 
@@ -1096,6 +1308,7 @@ import { GooglePlayLinkBodySchema, GooglePlayLinkResponseSchema } from "@pruvi/s
 import { env } from "@pruvi/env/server";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
+import { AppError, UnauthorizedError } from "../../utils/errors";
 import { BillingRepository } from "./billing.repository";
 import { BillingService } from "./billing.service";
 import { UltraRepository } from "../ultra/ultra.repository";
@@ -1105,21 +1318,20 @@ const repo = new BillingRepository(db);
 const ultra = new UltraService(new UltraRepository(db));
 const service = new BillingService(db, repo, ultra);
 
-async function webhookGuard(request: FastifyRequest, reply: FastifyReply) {
+// IMPORTANT: throw AppError subclasses so the project's error handler maps statusCode correctly.
+// Plain `throw new Error(...)` would fall through to the 500 branch regardless of reply.code().
+async function webhookGuard(request: FastifyRequest, _reply: FastifyReply) {
   if (!env.GOOGLE_PLAY_WEBHOOK_TOKEN) {
-    reply.code(503);
-    throw new Error("WEBHOOK_DISABLED");
+    throw new AppError("WEBHOOK_DISABLED", 503, "WEBHOOK_DISABLED");
   }
   const provided = request.headers["x-pruvi-webhook-token"];
   if (typeof provided !== "string") {
-    reply.code(401);
-    throw new Error("UNAUTHORIZED");
+    throw new UnauthorizedError("UNAUTHORIZED");
   }
   const a = Buffer.from(provided);
   const b = Buffer.from(env.GOOGLE_PLAY_WEBHOOK_TOKEN);
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    reply.code(401);
-    throw new Error("UNAUTHORIZED");
+    throw new UnauthorizedError("UNAUTHORIZED");
   }
 }
 
