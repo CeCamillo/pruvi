@@ -1,10 +1,12 @@
 import { ok, err, type Result } from "neverthrow";
 import { AppError, ConflictError } from "../../utils/errors";
-import { DEFAULT_SUBSCRIPTION_PERIOD_MS, type GooglePlayLinkResponse, type SubscriptionStatus } from "@pruvi/shared";
+import { DEFAULT_SUBSCRIPTION_PERIOD_MS, type GooglePlayLinkResponse, type AppStoreLinkResponse, type SubscriptionStatus } from "@pruvi/shared";
 import type { BillingRepository, SubscriptionRow } from "./billing.repository";
 import type { UltraService } from "../ultra/ultra.service";
 import type { DecodedGooglePlayEvent } from "./google-play.decoder";
 import { decodeGooglePlayPubSubEnvelope } from "./google-play.decoder";
+import type { DecodedAppStoreEvent } from "./app-store.decoder";
+import { decodeAppStoreNotification } from "./app-store.decoder";
 import type { db as DbClient } from "@pruvi/db";
 
 type Db = typeof DbClient;
@@ -198,6 +200,159 @@ export class BillingService {
       case "PRICE_STEP_UP_CONSENT_UPDATED":
         return { newStatus: sub.status, newPeriodEnd: sub.currentPeriodEnd, ultraEffect: { kind: "none" } };
     }
+  }
+
+  /** Apple webhook entry point. Same orchestration as processGooglePlayEnvelope:
+   *  decode → dedup → state machine → queue post-commit ultra effect. */
+  async processAppStoreEnvelope(envelope: unknown): Promise<Result<{ notificationUUID: string; kind: string }, AppError>> {
+    let decoded: DecodedAppStoreEvent;
+    try {
+      decoded = decodeAppStoreNotification(envelope);
+    } catch (e) {
+      return err(new AppError(`MALFORMED_ENVELOPE: ${(e as Error).message}`, 200, "MALFORMED_ENVELOPE"));
+    }
+
+    if (decoded.kind === "test") {
+      await this.repo.insertEvent(this.db, {
+        provider: "app_store",
+        messageId: decoded.notificationUUID,
+        eventType: "TEST",
+        purchaseToken: null,
+        payload: { kind: "test" },
+      });
+      return ok({ notificationUUID: decoded.notificationUUID, kind: "test" });
+    }
+
+    const effect = await this.db.transaction(async (tx) => {
+      const eventType = decoded.kind === "subscription" ? decoded.notificationType : `UNKNOWN_${decoded.notificationType}`;
+      // test was already handled above; subscription always has token, unknown may have it null.
+      const purchaseToken: string | null =
+        decoded.kind === "subscription" ? decoded.originalTransactionId : (decoded.originalTransactionId ?? null);
+      const inserted = await this.repo.insertEvent(tx, {
+        provider: "app_store",
+        messageId: decoded.notificationUUID,
+        eventType,
+        purchaseToken,
+        payload: decoded as unknown as Record<string, unknown>,
+      });
+      if (!inserted) {
+        return { kind: "none" } as PostCommitUltraEffect;
+      }
+
+      if (decoded.kind === "unknown") {
+        await this.repo.markEventProcessed(tx, inserted.id);
+        return { kind: "none" } as PostCommitUltraEffect;
+      }
+
+      let sub = await this.repo.findSubscriptionByToken(tx, "app_store", decoded.originalTransactionId);
+      if (!sub) {
+        sub = await this.repo.createOrphanSubscription(tx, "app_store", decoded.originalTransactionId);
+      }
+
+      const { newStatus, newPeriodEnd, ultraEffect } = this.applyAppStoreEvent(decoded, sub);
+      await this.repo.updateSubscriptionState(tx, sub.id, { status: newStatus, currentPeriodEnd: newPeriodEnd });
+
+      if (sub.userId === null) {
+        return { kind: "none" } as PostCommitUltraEffect;
+      }
+      await this.repo.markEventProcessed(tx, inserted.id);
+      return ultraEffect;
+    });
+
+    await this.applyUltraEffect(effect);
+    return ok({ notificationUUID: decoded.notificationUUID, kind: decoded.kind });
+  }
+
+  /** Pure state-machine for App Store events. Mirror of the Google `applyDecodedEvent`. */
+  applyAppStoreEvent(
+    decoded: DecodedAppStoreEvent,
+    sub: SubscriptionRow,
+  ): { newStatus: SubscriptionStatus; newPeriodEnd: Date | null; ultraEffect: PostCommitUltraEffect } {
+    if (decoded.kind !== "subscription") {
+      return { newStatus: sub.status, newPeriodEnd: sub.currentPeriodEnd, ultraEffect: { kind: "none" } };
+    }
+    const grant = (end: Date): PostCommitUltraEffect =>
+      sub.userId !== null
+        ? { kind: "grant", userId: sub.userId, expiresAt: end, excludeSubscriptionId: sub.id }
+        : { kind: "none" };
+    const revoke = (): PostCommitUltraEffect =>
+      sub.userId !== null
+        ? { kind: "revoke_if_no_other_active", userId: sub.userId, excludeSubscriptionId: sub.id }
+        : { kind: "none" };
+
+    switch (decoded.mappedAction.kind) {
+      case "activate":
+        return {
+          newStatus: "active",
+          newPeriodEnd: decoded.mappedAction.expiresDate,
+          ultraEffect: grant(decoded.mappedAction.expiresDate),
+        };
+      case "in_grace":
+        return { newStatus: "in_grace", newPeriodEnd: sub.currentPeriodEnd, ultraEffect: { kind: "none" } };
+      case "cancel_keep_entitlement":
+        return { newStatus: "canceled", newPeriodEnd: sub.currentPeriodEnd, ultraEffect: { kind: "none" } };
+      case "on_hold_keep_entitlement":
+        return { newStatus: "on_hold", newPeriodEnd: sub.currentPeriodEnd, ultraEffect: { kind: "none" } };
+      case "expire":
+        return { newStatus: "expired", newPeriodEnd: sub.currentPeriodEnd, ultraEffect: revoke() };
+      case "revoke":
+        return { newStatus: "revoked", newPeriodEnd: sub.currentPeriodEnd, ultraEffect: revoke() };
+      case "noop":
+        return { newStatus: sub.status, newPeriodEnd: sub.currentPeriodEnd, ultraEffect: { kind: "none" } };
+    }
+  }
+
+  async linkAppStorePurchase(
+    userId: string,
+    body: { originalTransactionId: string; productId: string },
+  ): Promise<Result<AppStoreLinkResponse, AppError>> {
+    const effects: PostCommitUltraEffect[] = [];
+    const finalRow = await this.db.transaction(async (tx) => {
+      const existing = await this.repo.findSubscriptionByToken(tx, "app_store", body.originalTransactionId);
+      let sub: SubscriptionRow;
+      if (!existing) {
+        const created = await this.repo.upsertLinkedSubscription(tx, {
+          userId, provider: "app_store", productId: body.productId, token: body.originalTransactionId,
+        });
+        sub = created.subscription;
+      } else if (existing.userId !== null && existing.userId !== userId) {
+        throw new ConflictError("PURCHASE_TOKEN_OWNED_BY_OTHER_USER");
+      } else if (existing.userId === userId) {
+        sub = existing;
+      } else {
+        sub = await this.repo.claimOrphanSubscription(tx, existing.id, userId, body.productId);
+      }
+
+      const parked = await this.repo.listUnprocessedEventsForToken(tx, "app_store", body.originalTransactionId);
+      for (const event of parked) {
+        const decoded = event.payload as unknown as DecodedAppStoreEvent;
+        if (decoded.kind !== "subscription") {
+          await this.repo.markEventProcessed(tx, event.id);
+          continue;
+        }
+        const fresh = await this.repo.findSubscriptionByToken(tx, "app_store", body.originalTransactionId);
+        if (!fresh) throw new Error("replay: subscription disappeared mid-transaction");
+        sub = fresh;
+        const { newStatus, newPeriodEnd, ultraEffect } = this.applyAppStoreEvent(decoded, sub);
+        await this.repo.updateSubscriptionState(tx, sub.id, { status: newStatus, currentPeriodEnd: newPeriodEnd });
+        await this.repo.markEventProcessed(tx, event.id);
+        effects.push(ultraEffect);
+      }
+      const final = await this.repo.findSubscriptionByToken(tx, "app_store", body.originalTransactionId);
+      if (!final) throw new Error("link: subscription disappeared mid-transaction");
+      return final;
+    });
+
+    for (const e of effects) await this.applyUltraEffect(e);
+
+    return ok({
+      subscription: {
+        id: finalRow.id,
+        status: finalRow.status,
+        productId: finalRow.productId,
+        currentPeriodEnd: finalRow.currentPeriodEnd?.toISOString() ?? null,
+      },
+    });
   }
 
   private async applyUltraEffect(effect: PostCommitUltraEffect): Promise<void> {
