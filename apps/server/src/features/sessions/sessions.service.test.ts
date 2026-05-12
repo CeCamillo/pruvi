@@ -43,10 +43,11 @@ function createMocks() {
 describe("SessionsService", () => {
   let repo: ReturnType<typeof createMocks>["repo"];
   let questionsService: ReturnType<typeof createMocks>["questionsService"];
+  let topicsService: ReturnType<typeof createMocks>["topicsService"];
   let service: SessionsService;
 
   beforeEach(() => {
-    ({ repo, questionsService, service } = createMocks());
+    ({ repo, questionsService, topicsService, service } = createMocks());
   });
 
   describe("startSession", () => {
@@ -97,6 +98,31 @@ describe("SessionsService", () => {
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap().questions).toEqual([]);
       expect(questionsService.selectForSession).not.toHaveBeenCalled();
+    });
+
+    it("snapshots mastery on prefetch fast-path when subtopic IDs are provided", async () => {
+      repo.findTodaySession.mockResolvedValue(null);
+      repo.createSession.mockResolvedValue(mockSession);
+      topicsService.snapshotMastery = vi.fn().mockResolvedValue({ "7": "aprendendo", "9": "afiado" });
+      repo.writeMasterySnapshot = vi.fn().mockResolvedValue(undefined);
+
+      const result = await service.startSession("user-1", "all", true, undefined, [7, 9]);
+
+      expect(result.isOk()).toBe(true);
+      expect(topicsService.snapshotMastery).toHaveBeenCalledWith("user-1", [7, 9]);
+      expect(repo.writeMasterySnapshot).toHaveBeenCalledWith(mockSession.id, { "7": "aprendendo", "9": "afiado" });
+    });
+
+    it("skips mastery snapshot on prefetch fast-path when subtopic IDs are empty/missing", async () => {
+      repo.findTodaySession.mockResolvedValue(null);
+      repo.createSession.mockResolvedValue(mockSession);
+      topicsService.snapshotMastery = vi.fn();
+      repo.writeMasterySnapshot = vi.fn();
+
+      await service.startSession("user-1", "all", true, undefined, []);
+
+      expect(topicsService.snapshotMastery).not.toHaveBeenCalled();
+      expect(repo.writeMasterySnapshot).not.toHaveBeenCalled();
     });
   });
 

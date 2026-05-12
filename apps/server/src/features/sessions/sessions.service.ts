@@ -25,6 +25,7 @@ export class SessionsService {
     mode: "all" | "theoretical",
     skipQuestions = false,
     topicId?: number,
+    prefetchedSubtopicIds?: number[],
   ): Promise<
     Result<
       {
@@ -65,8 +66,13 @@ export class SessionsService {
       return err(new NotFoundError("Failed to create session"));
     }
 
-    // Skip question selection if caller has cached questions
+    // Skip question selection if caller has cached questions.
+    // Caller passes the subtopic IDs from the prefetch payload so we can still snapshot mastery.
     if (skipQuestions) {
+      if (prefetchedSubtopicIds && prefetchedSubtopicIds.length > 0) {
+        const snapshot = await this.topicsService.snapshotMastery(userId, prefetchedSubtopicIds);
+        await this.repo.writeMasterySnapshot(session.id, snapshot);
+      }
       return ok({ session, questions: [] as QuestionItem[] });
     }
 
