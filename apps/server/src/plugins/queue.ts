@@ -5,12 +5,15 @@ import { env } from "@pruvi/env/server";
 import { parseRedisUrl } from "../utils/redis";
 import type { SendJobData } from "../features/notifications/dispatcher";
 
+export type BillingSweepJobData = { kind: "sweep" };
+
 declare module "fastify" {
   interface FastifyInstance {
     queues: {
       sessionPrefetch: Queue | null;
       notificationsCron: Queue | null;
       notificationsSend: Queue<SendJobData> | null;
+      billingSweep: Queue<BillingSweepJobData> | null;
     };
   }
 }
@@ -29,6 +32,7 @@ const plugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       sessionPrefetch: null,
       notificationsCron: null,
       notificationsSend: null,
+      billingSweep: null,
     });
     return;
   }
@@ -39,8 +43,16 @@ const plugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   const notificationsCronQueue = new Queue<NotificationsCronJobData>("notifications-cron", { connection });
   const notificationsSendQueue = new Queue<SendJobData>("notifications-send", { connection });
 
+  const billingSweepQueue = new Queue<BillingSweepJobData>("billing-cron", { connection });
+
   // Hourly cron — BullMQ dedupes repeatable jobs by name + pattern, so re-registration on boot is idempotent
   await notificationsCronQueue.add(
+    "sweep",
+    { kind: "sweep" },
+    { repeat: { pattern: "0 * * * *" }, removeOnComplete: true, removeOnFail: true },
+  );
+
+  await billingSweepQueue.add(
     "sweep",
     { kind: "sweep" },
     { repeat: { pattern: "0 * * * *" }, removeOnComplete: true, removeOnFail: true },
@@ -50,6 +62,7 @@ const plugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     sessionPrefetch: sessionPrefetchQueue,
     notificationsCron: notificationsCronQueue,
     notificationsSend: notificationsSendQueue,
+    billingSweep: billingSweepQueue,
   });
 
   fastify.addHook("onClose", async () => {
@@ -57,6 +70,7 @@ const plugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       sessionPrefetchQueue.close(),
       notificationsCronQueue.close(),
       notificationsSendQueue.close(),
+      billingSweepQueue.close(),
     ]);
   });
 };
