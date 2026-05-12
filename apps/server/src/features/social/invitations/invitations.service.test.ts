@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { InvitationsService } from "./invitations.service";
 import type { InvitationsRepository } from "./invitations.repository";
 import { NotFoundError, ValidationError } from "../../../utils/errors";

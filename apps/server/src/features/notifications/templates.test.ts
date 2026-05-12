@@ -6,7 +6,6 @@ import {
   masteryAchievement,
   overtaken,
   streakProtected,
-  type PushPayload,
 } from "./templates";
 
 describe("notification templates", () => {
