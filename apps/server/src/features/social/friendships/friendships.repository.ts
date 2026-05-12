@@ -115,4 +115,39 @@ export class FriendshipsRepository {
         ),
       );
   }
+
+  async getWeeklyXp(userId: string, weekStart: Date): Promise<number> {
+    const rows = await this.db.execute<{ weekly_xp: number }>(sql`
+      SELECT COALESCE(SUM(xp_earned), 0)::int AS weekly_xp
+      FROM review_log
+      WHERE user_id = ${userId} AND reviewed_at >= ${weekStart}
+    `);
+    const normalized = Array.isArray(rows) ? rows : (rows as { rows: Array<{ weekly_xp: number }> }).rows;
+    return normalized[0]?.weekly_xp ?? 0;
+  }
+
+  async findOvertakenFriendIds(
+    userId: string,
+    weekStart: Date,
+    previousWeeklyXp: number,
+    newWeeklyXp: number,
+  ): Promise<Array<{ friendId: string; weeklyXp: number }>> {
+    if (newWeeklyXp <= previousWeeklyXp) return [];
+    const result = await this.db.execute<{ friend_id: string; weekly_xp: number }>(sql`
+      WITH friends AS (
+        SELECT CASE WHEN requester_id = ${userId} THEN recipient_id ELSE requester_id END AS friend_id
+        FROM friendship
+        WHERE (requester_id = ${userId} OR recipient_id = ${userId}) AND status = 'accepted'
+      )
+      SELECT f.friend_id, COALESCE(SUM(rl.xp_earned), 0)::int AS weekly_xp
+      FROM friends f
+      LEFT JOIN review_log rl
+        ON rl.user_id = f.friend_id AND rl.reviewed_at >= ${weekStart}
+      GROUP BY f.friend_id
+      HAVING COALESCE(SUM(rl.xp_earned), 0) >= ${previousWeeklyXp}
+         AND COALESCE(SUM(rl.xp_earned), 0) < ${newWeeklyXp}
+    `);
+    const normalized = Array.isArray(result) ? result : (result as { rows: Array<{ friend_id: string; weekly_xp: number }> }).rows;
+    return normalized.map((r) => ({ friendId: r.friend_id, weeklyXp: r.weekly_xp }));
+  }
 }

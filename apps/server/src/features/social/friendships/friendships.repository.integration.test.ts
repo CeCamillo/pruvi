@@ -8,6 +8,10 @@ import {
 import { eq } from "drizzle-orm";
 import { user } from "@pruvi/db/schema/auth";
 import { friendship } from "@pruvi/db/schema/friendship";
+import { subject } from "@pruvi/db/schema/subjects";
+import { topic, subtopic } from "@pruvi/db/schema/topics";
+import { question } from "@pruvi/db/schema/questions";
+import { reviewLog } from "@pruvi/db/schema/review-log";
 import { FriendshipsRepository } from "./friendships.repository";
 
 describe("FriendshipsRepository (integration)", () => {
@@ -250,6 +254,160 @@ describe("FriendshipsRepository (integration)", () => {
 
       const pair = await repo.findExistingPair("del-a", "del-b");
       expect(pair).toBeNull();
+    });
+  });
+
+  /** Seed a question so review_log rows can be inserted. Returns questionId. */
+  async function seedQuestion(): Promise<number> {
+    const [subj] = await db
+      .insert(subject)
+      .values({ name: "Math", slug: "math" })
+      .returning();
+    const [t] = await db
+      .insert(topic)
+      .values({
+        subjectId: subj!.id,
+        name: "Algebra",
+        slug: "algebra",
+        displayOrder: 0,
+      })
+      .returning();
+    const [st] = await db
+      .insert(subtopic)
+      .values({
+        topicId: t!.id,
+        name: "Basics",
+        slug: "basics",
+        displayOrder: 0,
+      })
+      .returning();
+    const [q] = await db
+      .insert(question)
+      .values({
+        subjectId: subj!.id,
+        subtopicId: st!.id,
+        content: "1+1?",
+        options: ["1", "2", "3", "4"],
+        correctOptionIndex: 1,
+        difficulty: "easy" as const,
+        requiresCalculation: false,
+      })
+      .returning();
+    return q!.id;
+  }
+
+  async function insertReviewLog(
+    userId: string,
+    questionId: number,
+    xpEarned: number,
+    reviewedAt: Date,
+  ) {
+    await db.insert(reviewLog).values({
+      userId,
+      questionId,
+      quality: 4,
+      easinessFactor: "2.50",
+      interval: 1,
+      repetitions: 1,
+      xpEarned,
+      nextReviewAt: new Date(reviewedAt.getTime() + 24 * 60 * 60 * 1000),
+      reviewedAt,
+    });
+  }
+
+  async function makeFriendship(aId: string, bId: string) {
+    await db.insert(friendship).values({
+      requesterId: aId,
+      recipientId: bId,
+      status: "accepted",
+      acceptedAt: new Date(),
+    });
+  }
+
+  describe("findOvertakenFriendIds", () => {
+    it("returns friends with weekly XP in [previousWeeklyXp, newWeeklyXp)", async () => {
+      await insertUser("ot-me-001");
+      await insertUser("ot-fa-002");
+      await insertUser("ot-fb-003");
+      await insertUser("ot-fc-004");
+      await insertUser("ot-nf-005");
+
+      await makeFriendship("ot-me-001", "ot-fa-002");
+      await makeFriendship("ot-me-001", "ot-fb-003");
+      await makeFriendship("ot-me-001", "ot-fc-004");
+
+      const questionId = await seedQuestion();
+      const weekStart = new Date("2026-05-11T03:00:00.000Z");
+      const currentWeekDate = new Date("2026-05-13T10:00:00.000Z");
+
+      // ot-fa-002: 25 XP (in range [20, 50))
+      await insertReviewLog("ot-fa-002", questionId, 25, currentWeekDate);
+      // ot-fb-003: 50 XP (NOT - upper bound exclusive)
+      await insertReviewLog("ot-fb-003", questionId, 50, currentWeekDate);
+      // ot-fc-004: 15 XP (NOT - below previousWeeklyXp=20)
+      await insertReviewLog("ot-fc-004", questionId, 15, currentWeekDate);
+      // ot-nf-005: 25 XP (NOT - not a friend)
+      await insertReviewLog("ot-nf-005", questionId, 25, currentWeekDate);
+
+      const result = await repo.findOvertakenFriendIds("ot-me-001", weekStart, 20, 50);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.friendId).toBe("ot-fa-002");
+      expect(result[0]!.weeklyXp).toBe(25);
+    });
+
+    it("lower bound is inclusive", async () => {
+      await insertUser("me-lb");
+      await insertUser("friend-lb");
+
+      await makeFriendship("me-lb", "friend-lb");
+
+      const questionId = await seedQuestion();
+      const weekStart = new Date("2026-05-11T03:00:00.000Z");
+      const currentWeekDate = new Date("2026-05-13T10:00:00.000Z");
+
+      // friend-lb at exactly previousWeeklyXp=20 → should be returned
+      await insertReviewLog("friend-lb", questionId, 20, currentWeekDate);
+
+      const result = await repo.findOvertakenFriendIds("me-lb", weekStart, 20, 50);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.friendId).toBe("friend-lb");
+      expect(result[0]!.weeklyXp).toBe(20);
+    });
+
+    it("returns empty array when newWeeklyXp <= previousWeeklyXp", async () => {
+      const result = await repo.findOvertakenFriendIds("me-eq", new Date(), 50, 50);
+      expect(result).toEqual([]);
+    });
+
+    it("returns empty array when user has no friends", async () => {
+      const result = await repo.findOvertakenFriendIds("solo", new Date(), 0, 100);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("getWeeklyXp", () => {
+    it("sums xp_earned for the user within the week", async () => {
+      await insertUser("me-xp");
+
+      const questionId = await seedQuestion();
+      const weekStart = new Date("2026-05-11T03:00:00.000Z");
+      const currentWeekDate = new Date("2026-05-13T10:00:00.000Z");
+      const lastWeekDate = new Date("2026-05-08T10:00:00.000Z");
+
+      // 30 XP this week
+      await insertReviewLog("me-xp", questionId, 30, currentWeekDate);
+      // 100 XP last week (should NOT be counted)
+      await insertReviewLog("me-xp", questionId, 100, lastWeekDate);
+
+      const result = await repo.getWeeklyXp("me-xp", weekStart);
+      expect(result).toBe(30);
+    });
+
+    it("returns 0 when user has no reviews", async () => {
+      const result = await repo.getWeeklyXp("solo-xp", new Date());
+      expect(result).toBe(0);
     });
   });
 });
