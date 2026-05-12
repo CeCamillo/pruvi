@@ -10,6 +10,8 @@
 
 **Authoritative spec:** `docs/superpowers/specs/2026-05-12-phase-2e6-referral-shield-and-protect-streak-push-design.md` (v2 post Gate A).
 
+**Plan revision:** v2 post Gate B — Task 3.4 route handler returns `unwrapResult(result)` bare (no double-wrap); Task 3.3 explicitly ADDs the response schema (it doesn't exist today); Task 3.2 names line 105 of `invitations.service.test.ts` that must be updated; Task 2.2 imports and uses `MAX_STREAK_SHIELDS` constant instead of literal `1`.
+
 ---
 
 ## Task 1 — DB migration + schema + shared zod schemas
@@ -174,13 +176,13 @@ describe("acceptInvitation reward semantics (Phase 2E.6)", () => {
     await insertUser("inv-cap-1");
     await insertUser("invi-cap-1");
     await db.update(user)
-      .set({ inviteRewardPreference: "shield", streakShieldsAvailable: 1 })
+      .set({ inviteRewardPreference: "shield", streakShieldsAvailable: MAX_STREAK_SHIELDS })
       .where(eq(user.id, "inv-cap-1"));
     const result = await repo.acceptInvitation("inv-cap-1", "invi-cap-1");
     expect(result).toEqual({ rewardType: "xp", xpAwarded: 100, shieldGranted: false });
     const inviter = await db.select({ xp: user.totalXp, shields: user.streakShieldsAvailable })
       .from(user).where(eq(user.id, "inv-cap-1"));
-    expect(inviter[0]!.shields).toBe(1); // unchanged
+    expect(inviter[0]!.shields).toBe(MAX_STREAK_SHIELDS); // unchanged
     expect(inviter[0]!.xp).toBe(100);
     const audit = await db.select({ rt: invitationAcceptance.rewardType })
       .from(invitationAcceptance).where(eq(invitationAcceptance.inviterId, "inv-cap-1"));
@@ -189,7 +191,7 @@ describe("acceptInvitation reward semantics (Phase 2E.6)", () => {
 });
 ```
 
-Imports the test file needs: `user`, `invitationAcceptance` from the schema; `eq` from `drizzle-orm`; `MAX_STREAK_SHIELDS` already inferred via the data.
+Imports the test file needs: `user`, `invitationAcceptance` from the schema; `eq` from `drizzle-orm`; `MAX_STREAK_SHIELDS` from `@pruvi/shared` (use the constant, not the literal `1`, so the test stays correct if `MAX_STREAK_SHIELDS` ever changes).
 
 - [ ] **Step 2.3: Run + commit**
 
@@ -248,11 +250,15 @@ async acceptInvitation(code: string, userId: string): Promise<Result<{
 
 - [ ] **Step 3.2: Update `InvitationsService` tests**
 
-In `invitations.service.test.ts`, update the existing accept-invitation test mocks to return the new shape `{ rewardType, xpAwarded, shieldGranted }` from `repo.acceptInvitation` and assert the new `reward` object on the response. Add a new test for the shield-reward path: mock the repo to return `{ rewardType: "shield", xpAwarded: 0, shieldGranted: true }` and assert the response carries `reward.type === "shield"`.
+In `invitations.service.test.ts`, the existing accept-invitation success test (around lines 89–110) currently mocks `repo.acceptInvitation` to return `undefined` (void) and asserts `expect(result.value.xpAwarded).toBe(100)` on **line 105** (the assertion that will break after Task 3.1). Required changes:
 
-- [ ] **Step 3.3: Update accept-invitation route**
+1. Update the mock: `repo.acceptInvitation: vi.fn().mockResolvedValue({ rewardType: "xp", xpAwarded: 100, shieldGranted: false })` (was `mockResolvedValue(undefined)`).
+2. Update line 105 from `expect(result.value.xpAwarded).toBe(100)` to `expect(result.value.reward.xpAwarded).toBe(100)`. Also assert the full reward struct: `expect(result.value.reward).toEqual({ type: "xp", xpAwarded: 100, shieldGranted: false })`.
+3. ADD a new test "returns shield reward shape when repo grants a shield": mock the repo to return `{ rewardType: "shield", xpAwarded: 0, shieldGranted: true }`. Assert `result.value.reward` matches that struct and `result.value.reward.type === "shield"`.
 
-In `invitations.route.ts`, the response schema currently looks like `{ inviter, xpAwarded, friendshipCreated }`. Update the Zod response schema to the new shape:
+- [ ] **Step 3.3: Add accept-invitation response schema**
+
+`invitations.route.ts` currently has NO response schema on the `POST /invitations/accept` route — just a body schema. ADD a response schema for the new shape:
 
 ```ts
 const AcceptInvitationResponseSchema = z.object({
@@ -266,7 +272,7 @@ const AcceptInvitationResponseSchema = z.object({
 });
 ```
 
-Apply it to the route definition. The handler just returns `unwrapResult(...)`.
+Wire it into the route's `schema` block: `schema: { body: AcceptInvitationBodySchema, response: { 200: z.object({ success: z.literal(true), data: AcceptInvitationResponseSchema }) } }`. The handler stays the same shape: `return unwrapResult(result);`
 
 - [ ] **Step 3.4: Add `PATCH /users/me/invite-reward-preference` route**
 
@@ -285,10 +291,12 @@ fastify.patch(
   async (request) => {
     const { preference } = request.body;
     const result = await service.updateInviteRewardPreference(request.userId, preference);
-    return successResponse(unwrapResult(result).data);
+    return unwrapResult(result); // returns { success: true, data: { preference } }
   },
 );
 ```
+
+Matches the existing PATCH pattern in `users.route.ts` (line 25–38 of the existing file). Do NOT wrap with `successResponse(unwrapResult(result).data)` — that double-wraps the envelope.
 
 Add the corresponding service method `updateInviteRewardPreference(userId, preference)` and repository update method. Style: match `UsersService`'s existing PATCH methods.
 
