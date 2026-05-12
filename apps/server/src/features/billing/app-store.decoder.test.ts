@@ -127,6 +127,12 @@ describe("decodeAppStoreNotification", () => {
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("noop");
   });
 
+  it("decodes RENEWAL_EXTENDED → noop", () => {
+    const env = buildEnvelope({ notificationType: "RENEWAL_EXTENDED" });
+    const d = decodeAppStoreNotification(env);
+    expect(d.kind === "subscription" && d.mappedAction.kind).toBe("noop");
+  });
+
   it("returns kind=test for TEST notification (no data object)", () => {
     const env = { signedPayload: makeJws({ notificationUUID: "uuid-test", notificationType: "TEST", version: "2.0" }) };
     const d = decodeAppStoreNotification(env);

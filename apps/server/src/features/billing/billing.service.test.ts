@@ -319,4 +319,34 @@ describe("BillingService — App Store", () => {
     await service.processAppStoreEnvelope(buildAppStoreEnvelope("SUBSCRIBED", { expiresDate: futureMs }));
     expect(ultra.grant).toHaveBeenCalledWith("u1", farFuture);
   });
+
+  // Case 12: DID_CHANGE_RENEWAL_STATUS:AUTO_RENEW_DISABLED → status=canceled, no Ultra change
+  it("App Store DID_CHANGE_RENEWAL_STATUS:AUTO_RENEW_DISABLED → status=canceled, no Ultra change", async () => {
+    const linked: SubscriptionRow = {
+      id: 10, userId: "u1", provider: "app_store", productId: "p", purchaseToken: "tok",
+      status: "active", currentPeriodEnd: new Date(Date.now() + 30 * 86400000), linkedAt: new Date(),
+    };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked });
+    const env = buildAppStoreEnvelope("DID_CHANGE_RENEWAL_STATUS", { subtype: "AUTO_RENEW_DISABLED" });
+    await service.processAppStoreEnvelope(env);
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(
+      expect.anything(),
+      10,
+      expect.objectContaining({ status: "canceled" }),
+    );
+    expect(ultra.grant).not.toHaveBeenCalled();
+    expect(ultra.revoke).not.toHaveBeenCalled();
+  });
+
+  // Case 13: linkAppStorePurchase same-user idempotency
+  it("App Store link: same user re-call returns existing subscription, no error", async () => {
+    const existing: SubscriptionRow = {
+      id: 10, userId: "u1", provider: "app_store", productId: "p", purchaseToken: "tok",
+      status: "active", currentPeriodEnd: null, linkedAt: new Date(),
+    };
+    const { service } = buildSut({ findSubscription: existing });
+    const r = await service.linkAppStorePurchase("u1", { originalTransactionId: "tok", productId: "p" });
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) expect(r.value.subscription.id).toBe(10);
+  });
 });
