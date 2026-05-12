@@ -1,6 +1,6 @@
 # Phase 2E.6 — Referral Shield Reward + Protect-Streak Push (Design Spec)
 
-**Status:** v1
+**Status:** v2 (post Gate A: real Dispatcher API, existing prefs flag, service-layer wiring, TX reorder for audit correctness, real StreaksService API)
 **Date:** 2026-05-12
 **Branch:** `feature/phase-2e6-referral-shield-and-protect-streak-push`
 **Product source:** `pruvi-freatures.md` §4 (referral reward), §5.3 (shield protection notification)
@@ -67,39 +67,37 @@ Existing rows backfill to `'xp'` (their actual historical behavior).
 
 ### 5.1 Invitation reward flow
 
-`InvitationsRepository.acceptInvitation(inviterId, inviteeId)` becomes:
+`InvitationsRepository.acceptInvitation(inviterId, inviteeId)` becomes (note the step order — the conditional UPDATE happens BEFORE the audit insert, so `reward_type` always reflects what was actually delivered):
 
 ```ts
 async acceptInvitation(inviterId: string, inviteeId: string): Promise<{ rewardType: "xp" | "shield"; xpAwarded: number; shieldGranted: boolean }> {
   return await this.db.transaction(async (tx) => {
-    // 1. Read inviter preference + current shield balance.
-    const inviter = await tx.select({
-      pref: user.inviteRewardPreference,
-      shields: user.streakShieldsAvailable,
-    }).from(user).where(eq(user.id, inviterId)).limit(1);
+    // 1. Read inviter preference.
+    const inviter = await tx.select({ pref: user.inviteRewardPreference })
+      .from(user).where(eq(user.id, inviterId)).limit(1);
     const pref = inviter[0]?.pref ?? "xp";
-    const currentShields = inviter[0]?.shields ?? 0;
 
-    // 2. Decide actual reward (shield with cap fallback).
+    // 2. Attempt shield grant FIRST if preferred (race-safe via predicate-in-WHERE).
+    //    .returning() lets us inspect whether the conditional UPDATE actually changed a row.
     let actualReward: "xp" | "shield" = "xp";
-    if (pref === "shield" && currentShields < MAX_STREAK_SHIELDS) {
-      actualReward = "shield";
+    if (pref === "shield") {
+      const updated = await tx.update(user)
+        .set({ streakShieldsAvailable: sql`${user.streakShieldsAvailable} + 1` })
+        .where(and(eq(user.id, inviterId), lt(user.streakShieldsAvailable, MAX_STREAK_SHIELDS)))
+        .returning({ id: user.id });
+      if (updated.length > 0) actualReward = "shield";
+      // else: cap was already at MAX (race lost or pre-existing) — fall through to XP path.
     }
 
-    // 3. Insert acceptance with the actual reward type.
-    await tx.insert(invitationAcceptance).values({ inviterId, inviteeId, rewardType: actualReward });
-
-    // 4. Apply reward.
-    if (actualReward === "shield") {
-      // Conditional UPDATE guards against race between read-then-update.
-      await tx.update(user)
-        .set({ streakShieldsAvailable: sql`${user.streakShieldsAvailable} + 1` })
-        .where(and(eq(user.id, inviterId), lt(user.streakShieldsAvailable, MAX_STREAK_SHIELDS)));
-    } else {
+    // 3. XP path (either preference="xp" OR shield-grant fell back).
+    if (actualReward === "xp") {
       await tx.update(user)
         .set({ totalXp: sql`${user.totalXp} + 100` })
         .where(eq(user.id, inviterId));
     }
+
+    // 4. NOW insert the audit row with the truthful delivered reward.
+    await tx.insert(invitationAcceptance).values({ inviterId, inviteeId, rewardType: actualReward });
 
     // 5. Friendship (unchanged).
     await tx.insert(friendship).values({ requesterId: inviterId, recipientId: inviteeId, status: "accepted", acceptedAt: new Date() });
@@ -109,18 +107,61 @@ async acceptInvitation(inviterId: string, inviteeId: string): Promise<{ rewardTy
 }
 ```
 
-`InvitationsService.acceptInvitation` returns the reward info to the route.
+`InvitationsService.acceptInvitation` MUST be updated to capture the repo's return value and propagate it into the response. Today it discards the return and hard-codes `xpAwarded: 100`:
+
+```ts
+// BEFORE (today):
+await this.repo.acceptInvitation(inviter.id, userId);
+return ok({ inviter: ..., xpAwarded: 100, friendshipCreated: true });
+
+// AFTER (this phase):
+const reward = await this.repo.acceptInvitation(inviter.id, userId);
+return ok({
+  inviter: ...,
+  reward: { type: reward.rewardType, xpAwarded: reward.xpAwarded, shieldGranted: reward.shieldGranted },
+  friendshipCreated: true,
+});
+```
 
 ### 5.2 Protect-streak push flow
 
-`SessionsService.maybeProtectMissedDay` becomes:
+**New `Dispatcher` method** (NOT a generic enqueue — the existing dispatcher follows a "one method per notification kind" pattern; see `sendAchievementNotification`, `sendOvertakenNotification`, `dispatchStreakReminder` in `dispatcher.ts`). Add:
+
+```ts
+async sendStreakProtectedNotification(userId: string, streakDays: number): Promise<void> {
+  // Defensive: only push when there's a real streak to celebrate.
+  if (streakDays < 1) return;
+
+  const prefs = await this.deps.prefsRepo.get(userId);
+  // Reuse the existing streakRemindersEnabled flag — this notification is fundamentally
+  // about streak health and shares the same user-opt-out semantics as streak reminders.
+  // No new preference column needed (Gate A B2 fix).
+  if (!prefs?.streakRemindersEnabled) return;
+
+  const tokens = await this.deps.tokensService.listTokensForUser(userId);
+  if (tokens.length === 0) return;
+
+  const payload = streakProtected(streakDays);
+  for (let i = 0; i < tokens.length; i += EXPO_BATCH_SIZE) {
+    const chunk = tokens.slice(i, i + EXPO_BATCH_SIZE);
+    await this.deps.sendQueue.add("send", {
+      tokens: chunk,
+      title: payload.title,
+      body: payload.body,
+      data: { kind: "streak_protected" },
+    });
+  }
+}
+```
+
+`SessionsService.maybeProtectMissedDay` is updated to inspect `tryUseShield`'s return value (today the result is discarded) and call the new dispatcher method when protection succeeded:
 
 ```ts
 private async maybeProtectMissedDay(userId: string): Promise<void> {
   // ... existing date-gap logic unchanged ...
   const result = await this.shieldsService!.tryUseShield(userId, yesterdayStr);
-  if (result.used) {
-    // Fire-and-forget push notification.
+  if (result.used && this.dispatcher && this.streaksService) {
+    // Fire-and-forget; do not block session completion on push delivery.
     void this.enqueueProtectedStreakPush(userId).catch((e) => {
       this.logger?.error?.({ err: e, userId }, "protect-streak push enqueue failed");
     });
@@ -128,17 +169,20 @@ private async maybeProtectMissedDay(userId: string): Promise<void> {
 }
 
 private async enqueueProtectedStreakPush(userId: string): Promise<void> {
-  if (!this.dispatcher) return;
-  const streaks = await this.streaksService!.getStreakStats(userId);
-  await this.dispatcher.enqueue(userId, "streak_protected", streakProtected(streaks.currentStreak));
+  const streaksResult = await this.streaksService!.getStreaks(userId);
+  if (streaksResult.isErr()) return;
+  const days = streaksResult.value.currentStreak;
+  if (days < 1) return;
+  await this.dispatcher!.sendStreakProtectedNotification(userId, days);
 }
 ```
 
-The `Dispatcher.enqueue(userId, kind, payload)` method already exists for other notification kinds (verify in the implementation — if signature differs, the plan will adapt). The notification kind `streak_protected` is a new value in the existing notification-kind enum and must be added to the preferences-respect filter so a user can opt out.
+Uses the existing `StreaksService.getStreaks(userId)` which returns `Result<{ currentStreak, longestStreak, totalSessions }, AppError>`. The result is unwrapped via `.isOk()`/`.value`, matching the project's neverthrow conventions.
 
 ### 5.3 Notification preferences
 
-Existing user-preference schema has per-kind opt-out flags. The plan adds `streak_protected_enabled: boolean default true` (or whatever existing pattern — verify in plan stage). If the user has opted out, the dispatcher skips the send.
+**No new preference column.** The `streakRemindersEnabled` boolean (existing on `user`, default true) gates the protect-streak push. Rationale: from the user's perspective both notifications are about streak health; collapsing them into one opt-out is the simplest UX (one switch, predictable behavior).
+
 
 ## 6. API surface
 
@@ -237,10 +281,12 @@ A6. Inviter with preference `"shield"` and shields already at MAX: an accept cal
 A7. The shield update is race-safe: two concurrent accepts on a same-inviter-preference=shield-at-shields=0 do NOT push the inviter to shields=2.
 A8. When `ShieldsService.tryUseShield` returns `{ used: true }` from the auto-protect hook in `SessionsService.maybeProtectMissedDay`, a notification of kind `"streak_protected"` is enqueued via the existing dispatcher with the user's current streak length.
 A9. When `tryUseShield` returns `{ used: false }`, no notification is enqueued.
-A10. If the user has opted out of `streak_protected` notifications (preference flag), the dispatcher skips the send (existing preference-respect mechanism).
+A10. If the user has `streakRemindersEnabled = false`, the dispatcher skips the send (the protect-streak push reuses this flag; no new preference column).
 A11. The template `streakProtected(days)` returns pt-BR strings matching §7.
 A12. The accept-invitation response includes `reward: { type, xpAwarded, shieldGranted }`. The top-level `xpAwarded` field is removed.
 A13. All errors logged via `fastify.log`/`logger.error`. No `console.error` in production paths.
+A14. The protect-streak push is suppressed when `currentStreak < 1` (defensive guard against an edge case where the shield is used but the streak computation returns 0). Tested at both the service hook and the dispatcher method.
+A15. The shield-grant in `acceptInvitation` is race-safe via predicate-in-WHERE: two concurrent accepts at `shields=0, MAX=1` produce exactly one shield (one row updated; the other falls back to XP and records `reward_type='xp'`). Audit trail reflects the actual delivered reward.
 
 ## 11. Deferred items
 
