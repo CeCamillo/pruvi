@@ -77,6 +77,7 @@ export const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
     googlePreHandler = async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = request.headers.authorization;
       if (typeof auth !== "string" || !auth.startsWith("Bearer ")) {
+        fastify.log.warn({ hasAuth: typeof auth === "string" }, "google-play oidc missing or malformed authorization header");
         throw new UnauthorizedError("UNAUTHORIZED");
       }
       const jwt = auth.slice("Bearer ".length).trim();

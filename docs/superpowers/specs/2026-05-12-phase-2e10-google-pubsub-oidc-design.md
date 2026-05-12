@@ -212,6 +212,8 @@ All existing webhook tests pass unchanged when the flag is unset.
 
 ## 10. Deferred
 
+- **Route-level integration tests** for preHandler selection, 401 response shape, and boot-time cross-field env validation — covered indirectly via unit tests + manual testing; full Fastify-inject coverage is a separate task.
+- **ERROR-level logging discrimination** for security-critical OIDC failures (unknown kid, signature invalid, wrong issuer/audience/email). Currently all failures log at WARN. Requires adding a `reason` field to `OidcVerificationError` and branching the route's catch on it. Same pattern as the 2E.9 deferred ERROR-level distinction.
 - **Retire `GOOGLE_PLAY_WEBHOOK_TOKEN` completely** — config-only follow-up after OIDC verification is in production for a few weeks.
 - **JWKs ETag/304 conditional fetching** — small bandwidth optimization.
 - **Refresh-ahead** — proactively refresh keys before TTL expiry; today we refresh lazily on next call.

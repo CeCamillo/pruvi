@@ -87,6 +87,23 @@ describe("GoogleJwksCache", () => {
     const cache = new GoogleJwksCache({ fetchImpl: fetchImpl as unknown as typeof fetch, logger });
     const key = await cache.getKey("kid-1");
     expect(key).toBeNull();
+    expect(logger.error).toHaveBeenCalled();
+  });
+
+  it("re-fetches after TTL elapses", async () => {
+    let nowMs = 1_700_000_000_000;
+    fetchImpl.mockResolvedValueOnce(jsonResponse({ keys: [realJwk] }, { maxAge: 60 }));
+    fetchImpl.mockResolvedValueOnce(jsonResponse({ keys: [realJwk] }, { maxAge: 60 }));
+    const cache = new GoogleJwksCache({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      logger,
+      now: () => nowMs,
+    });
+    await cache.getKey("kid-1");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    nowMs += 70_000; // past 60s TTL
+    await cache.getKey("kid-1");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("falls back to 3600s TTL when no Cache-Control header", async () => {
