@@ -5,6 +5,10 @@ import { MAX_LIVES, computeRegenSnapshot } from "@pruvi/shared";
 
 type DbClient = typeof db;
 
+function isUltraActive(row: { isUltra: boolean; ultraExpiresAt: Date | null }, now: Date): boolean {
+  return row.isUltra && (!row.ultraExpiresAt || row.ultraExpiresAt > now);
+}
+
 export class LivesRepository {
   constructor(private db: DbClient) {}
 
@@ -13,6 +17,8 @@ export class LivesRepository {
       .select({
         lives: user.lives,
         livesLastRegenAt: user.livesLastRegenAt,
+        isUltra: user.isUltra,
+        ultraExpiresAt: user.ultraExpiresAt,
       })
       .from(user)
       .where(eq(user.id, userId))
@@ -23,11 +29,17 @@ export class LivesRepository {
   async materializeRegen(
     userId: string,
     now: Date,
-  ): Promise<{ lives: number; lastRegenAt: Date | null }> {
+  ): Promise<{ lives: number; lastRegenAt: Date | null; isUltra: boolean }> {
     const current = await this.getUserLives(userId);
     if (!current) {
-      return { lives: MAX_LIVES, lastRegenAt: null };
+      return { lives: MAX_LIVES, lastRegenAt: null, isUltra: false };
     }
+
+    // Ultra bypass: skip regen logic entirely
+    if (isUltraActive(current, now)) {
+      return { lives: MAX_LIVES, lastRegenAt: null, isUltra: true };
+    }
+
     const snap = computeRegenSnapshot(current.lives, current.livesLastRegenAt, now);
     if (snap.regenerated > 0) {
       await this.db
@@ -35,16 +47,23 @@ export class LivesRepository {
         .set({ lives: snap.lives, livesLastRegenAt: snap.lastRegenAt })
         .where(eq(user.id, userId));
     }
-    return { lives: snap.lives, lastRegenAt: snap.lastRegenAt };
+    return { lives: snap.lives, lastRegenAt: snap.lastRegenAt, isUltra: false };
   }
 
   async tryDecrement(
     userId: string,
     now: Date,
   ): Promise<
-    | { ok: true; livesAfter: number; lastRegenAt: Date | null }
+    | { ok: true; livesAfter: number; lastRegenAt: Date | null; isUltra: boolean }
     | { ok: false }
   > {
+    // Ultra bypass: skip atomic UPDATE entirely
+    const current = await this.getUserLives(userId);
+    if (current && isUltraActive(current, now)) {
+      return { ok: true, livesAfter: MAX_LIVES, lastRegenAt: null, isUltra: true };
+    }
+
+    // Existing race-free atomic UPDATE for non-Ultra users
     const result = await this.db
       .update(user)
       .set({
@@ -59,6 +78,6 @@ export class LivesRepository {
 
     const row = result[0];
     if (!row) return { ok: false };
-    return { ok: true, livesAfter: row.lives, lastRegenAt: row.livesLastRegenAt };
+    return { ok: true, livesAfter: row.lives, lastRegenAt: row.livesLastRegenAt, isUltra: false };
   }
 }

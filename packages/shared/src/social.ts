@@ -42,6 +42,7 @@ export const RankingEntrySchema = z.object({
   name: z.string(),
   username: z.string().nullable(),
   image: z.string().nullable(),
+  isUltra: z.boolean(),
   weeklyXp: z.number().int().nonnegative(),
   rank: z.number().int().positive(),
   isMe: z.boolean(),

@@ -50,6 +50,13 @@
       "when": 1778540820492,
       "tag": "0006_special_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778545868777,
+      "tag": "0007_open_valeria_richards",
+      "breakpoints": true
     }
   ]
 }

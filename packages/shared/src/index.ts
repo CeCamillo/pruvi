@@ -14,3 +14,4 @@ export * from "./topics";
 export * from "./notifications";
 export * from "./social";
 export * from "./weekly";
+export * from "./ultra";

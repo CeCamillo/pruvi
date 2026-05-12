@@ -8,6 +8,7 @@ export const LivesResponseSchema = z.object({
   lives: z.number().int().min(0).max(MAX_LIVES),
   maxLives: z.literal(MAX_LIVES),
   resetsAt: z.coerce.date().nullable(),
+  unlimited: z.boolean(),
 });
 
 export type LivesResponse = z.infer<typeof LivesResponseSchema>;

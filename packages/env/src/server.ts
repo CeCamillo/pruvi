@@ -19,6 +19,7 @@ export const env = createEnv({
     APPLE_CLIENT_SECRET: z.string().optional(),
     APPLE_BUNDLE_ID: z.string().optional(),
     EXPO_ACCESS_TOKEN: z.string().optional(),
+    ADMIN_API_TOKEN: z.string().min(16).optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

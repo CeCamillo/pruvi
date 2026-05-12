@@ -16,6 +16,7 @@ export class RankingService {
       weeklyXp: r.weekly_xp,
       rank: i + 1,
       isMe: r.user_id === userId,
+      isUltra: r.is_ultra,
     }));
 
     let entries = ranked;

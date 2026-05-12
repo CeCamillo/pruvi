@@ -28,9 +28,14 @@ export async function createTestDb() {
       notification_hour INTEGER NOT NULL DEFAULT 19,
       streak_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE,
       achievement_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      is_ultra BOOLEAN NOT NULL DEFAULT false,
+      ultra_expires_at TIMESTAMP,
+      CONSTRAINT user_ultra_expiry_chk CHECK (ultra_expires_at IS NULL OR is_ultra = true),
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+
+    CREATE INDEX IF NOT EXISTS "user_ultra_expiry_idx" ON "user" (ultra_expires_at) WHERE is_ultra = true;
 
     CREATE TABLE IF NOT EXISTS "session" (
       id TEXT PRIMARY KEY,
