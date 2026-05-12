@@ -8,7 +8,9 @@
 
 **Tech Stack:** Drizzle ORM, Fastify 5 + fastify-type-provider-zod on Bun, neverthrow Result, real Postgres for integration tests.
 
-**Authoritative spec:** `docs/superpowers/specs/2026-05-12-phase-2e5-app-store-webhooks-design.md` (v2 post Gate A).
+**Authoritative spec:** `docs/superpowers/specs/2026-05-12-phase-2e5-app-store-webhooks-design.md` (v3 post Gate B).
+
+**Plan revision:** v2 post Gate B — Step 1.4 rename count corrected (10 sites not 3), `linkAppStorePurchase` return type uses `AppStoreLinkResponse`, decoder tests include SUBSCRIBED:RESUBSCRIBE and REVOKE explicitly, test-count arithmetic in Step 3.3 corrected, dead ternary in `processAppStoreEnvelope` clarified.
 
 ---
 
@@ -98,7 +100,12 @@ import {
 
 - [ ] **Step 1.4: Rename `processWebhookEnvelope` → `processGooglePlayEnvelope` (mechanical)**
 
-In `apps/server/src/features/billing/billing.service.ts`, rename the method (the only definition site). Update the route call site in `apps/server/src/features/billing/billing.route.ts`. Update the test file if it references the old name. Run `grep -rn "processWebhookEnvelope" apps/ packages/` first to confirm there are exactly the expected three sites (definition + route call + service test). If there are more, STOP — there shouldn't be.
+Rename ALL occurrences across these files:
+- `apps/server/src/features/billing/billing.service.ts` — 1 definition site (the method on `BillingService`).
+- `apps/server/src/features/billing/billing.route.ts` — 1 call site (the Google webhook handler).
+- `apps/server/src/features/billing/billing.service.test.ts` — 8 call sites inside the test cases.
+
+Total: 10 occurrences. Use `grep -rn "processWebhookEnvelope" apps/ packages/` to confirm before and after. Use a single `sed`/IDE rename across the file or `replace_all` in Edit. The new method has identical signature and semantics.
 
 - [ ] **Step 1.5: Run tests + commit**
 
@@ -359,6 +366,12 @@ describe("decodeAppStoreNotification", () => {
     }
   });
 
+  it("decodes SUBSCRIBED:RESUBSCRIBE → activate", () => {
+    const env = buildEnvelope({ notificationType: "SUBSCRIBED", subtype: "RESUBSCRIBE" });
+    const d = decodeAppStoreNotification(env);
+    expect(d.kind === "subscription" && d.mappedAction.kind).toBe("activate");
+  });
+
   it("decodes DID_RENEW → activate with expiresDate", () => {
     const futureMs = Date.now() + 30 * 86400000;
     const env = buildEnvelope({ notificationType: "DID_RENEW", expiresDate: futureMs });
@@ -389,6 +402,12 @@ describe("decodeAppStoreNotification", () => {
 
   it("decodes REFUND → revoke", () => {
     const env = buildEnvelope({ notificationType: "REFUND" });
+    const d = decodeAppStoreNotification(env);
+    expect(d.kind === "subscription" && d.mappedAction.kind).toBe("revoke");
+  });
+
+  it("decodes REVOKE → revoke", () => {
+    const env = buildEnvelope({ notificationType: "REVOKE" });
     const d = decodeAppStoreNotification(env);
     expect(d.kind === "subscription" && d.mappedAction.kind).toBe("revoke");
   });
@@ -464,7 +483,7 @@ describe("decodeAppStoreNotification", () => {
 cd apps/server && bun test src/features/billing/app-store.decoder.test.ts
 ```
 
-Expected: 17 pass.
+Expected: 19 pass (17 base cases + SUBSCRIBED:RESUBSCRIBE + REVOKE).
 
 ```bash
 git add apps/server/src/features/billing/app-store.decoder.ts apps/server/src/features/billing/app-store.decoder.test.ts
@@ -514,7 +533,9 @@ async processAppStoreEnvelope(envelope: unknown): Promise<Result<{ notificationU
 
   const effect = await this.db.transaction(async (tx) => {
     const eventType = decoded.kind === "subscription" ? decoded.notificationType : `UNKNOWN_${decoded.notificationType}`;
-    const purchaseToken = decoded.kind === "subscription" ? decoded.originalTransactionId : decoded.originalTransactionId;
+    // test was already handled above; subscription always has token, unknown may have it null.
+    const purchaseToken: string | null =
+      decoded.kind === "subscription" ? decoded.originalTransactionId : (decoded.originalTransactionId ?? null);
     const inserted = await this.repo.insertEvent(tx, {
       provider: "app_store",
       messageId: decoded.notificationUUID,
@@ -592,7 +613,7 @@ applyAppStoreEvent(
 async linkAppStorePurchase(
   userId: string,
   body: { originalTransactionId: string; productId: string },
-): Promise<Result<GooglePlayLinkResponse, AppError>> {
+): Promise<Result<AppStoreLinkResponse, AppError>> {
   const effects: PostCommitUltraEffect[] = [];
   const finalRow = await this.db.transaction(async (tx) => {
     const existing = await this.repo.findSubscriptionByToken(tx, "app_store", body.originalTransactionId);
@@ -643,7 +664,7 @@ async linkAppStorePurchase(
 }
 ```
 
-(`GooglePlayLinkResponse` is already imported in the file from Phase 2E.4. If not, add the import.)
+Add `AppStoreLinkResponse` to the imports from `@pruvi/shared` at the top of `billing.service.ts`. `GooglePlayLinkResponse` is already imported in the file from Phase 2E.4 (keep it for the existing Google method).
 
 - [ ] **Step 3.2: Add service tests**
 
@@ -693,7 +714,14 @@ function buildAppStoreEnvelope(notificationType: string, opts: { subtype?: strin
 cd apps/server && bun test src/features/billing/
 ```
 
-Expected: 34 prior + ~12 new = 46 pass. (Decoder tests already at 17 from Task 2 + 11 service Google + 8 repo integration = 36 base; + new App Store service tests.)
+Expected counts after this task:
+- Google Play decoder: 12 (unchanged from 2E.4)
+- Repository integration: 11 (unchanged; cross-provider tests added in Task 4 will bump this to 13)
+- Google Play service: 11 (unchanged — only method name renamed)
+- App Store decoder: 19 (Task 2 — 17 base + RESUBSCRIBE + REVOKE additions)
+- App Store service: 11 new (Task 3, this step)
+
+Total billing/ tests after Task 3: 12 + 11 + 11 + 19 + 11 = **64 pass**.
 
 ```bash
 git add apps/server/src/features/billing/billing.service.ts apps/server/src/features/billing/billing.service.test.ts
