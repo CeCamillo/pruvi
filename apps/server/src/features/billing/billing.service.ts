@@ -62,7 +62,7 @@ export class BillingService {
     if (decoded.kind === "subscription" && GRANT_TYPES.has(decoded.notificationTypeName)) {
       const packageName = decoded.packageName || this.packageNameFallback || null;
       if (!packageName) {
-        console.warn({ messageId: decoded.messageId, reason: "no_package_name" }, "google-play real-expiry fallback");
+        console.warn(`google-play real-expiry fallback: no_package_name messageId=${decoded.messageId}`);
       } else {
         realExpiryTime = await this.apiClient.getSubscription(packageName, decoded.purchaseToken);
       }

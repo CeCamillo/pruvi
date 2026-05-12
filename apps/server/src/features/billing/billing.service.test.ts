@@ -184,9 +184,11 @@ describe("real expiryTime override", () => {
   it("RENEWED with apiClient returning a real expiry uses that date for currentPeriodEnd and grant", async () => {
     const realExpiry = new Date("2026-06-12T15:30:00Z");
     const linked: SubscriptionRow = { id: 20, userId: "u2", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: null, linkedAt: new Date() };
-    const { service, repo, ultra } = buildSut({ findSubscription: linked, apiClient: makeStubApiClient(realExpiry) });
+    const apiClient = makeStubApiClient(realExpiry);
+    const { service, repo, ultra } = buildSut({ findSubscription: linked, apiClient });
     const r = await service.processGooglePlayEnvelope(buildEnvelope(2));   // RENEWED
     expect(r.isOk()).toBe(true);
+    expect(apiClient.getSubscription).toHaveBeenCalledWith("com.pruvi.app", "tok");
     expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 20, expect.objectContaining({ status: "active", currentPeriodEnd: realExpiry }));
     expect(ultra.grant).toHaveBeenCalledWith("u2", realExpiry);
   });
@@ -200,7 +202,7 @@ describe("real expiryTime override", () => {
     const call = repo.updateSubscriptionState.mock.calls[0]!;
     const end = call[2].currentPeriodEnd as Date;
     const expected = before + 30 * 24 * 60 * 60 * 1000;
-    expect(end.getTime()).toBeGreaterThanOrEqual(expected - 1000);
+    expect(end.getTime()).toBeGreaterThanOrEqual(expected);
     expect(end.getTime()).toBeLessThanOrEqual(expected + 5000);
   });
 
