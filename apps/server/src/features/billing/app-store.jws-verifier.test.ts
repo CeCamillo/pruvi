@@ -1,4 +1,4 @@
-import "reflect-metadata";
+import "reflect-metadata"; // @peculiar/x509 → tsyringe DI requires this at module load
 import { describe, it, expect, beforeAll } from "vitest";
 import { webcrypto } from "node:crypto";
 import {
@@ -196,6 +196,12 @@ describe("AppStoreJwsVerifier", () => {
   it("throws when ES256 signature is invalid (tampered)", async () => {
     const verifier = new AppStoreJwsVerifier({ rootCertPem: chain.rootPem });
     const jws = await mintJws({ x: 1 }, chain, { tamperedSignature: true });
+    expect(() => verifier.verify(jws)).toThrow(/signature invalid/);
+  });
+
+  it("throws when signature covers a different payload (payload tampered post-signing)", async () => {
+    const verifier = new AppStoreJwsVerifier({ rootCertPem: chain.rootPem });
+    const jws = await mintJws({ x: 1 }, chain, { tamperedPayload: { x: 99 } });
     expect(() => verifier.verify(jws)).toThrow(/signature invalid/);
   });
 
