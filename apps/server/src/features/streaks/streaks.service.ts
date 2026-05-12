@@ -1,9 +1,13 @@
 import { ok, type Result } from "neverthrow";
 import type { AppError } from "../../utils/errors";
 import type { StreaksRepository } from "./streaks.repository";
+import type { ShieldsRepository } from "../shields/shields.repository";
 
 export class StreaksService {
-  constructor(private repo: StreaksRepository) {}
+  constructor(
+    private repo: StreaksRepository,
+    private shieldsRepo?: ShieldsRepository,
+  ) {}
 
   async getStreaks(
     userId: string
@@ -13,18 +17,28 @@ export class StreaksService {
       AppError
     >
   > {
-    const [dates, totalSessions] = await Promise.all([
+    const [completedDates, protectedDates, totalSessions] = await Promise.all([
       this.repo.getCompletedSessionDates(userId),
+      this.shieldsRepo?.listProtectedDates(userId) ?? Promise.resolve([] as string[]),
       this.repo.countCompletedSessions(userId),
     ]);
 
-    if (dates.length === 0) {
+    // Both arrays contain `YYYY-MM-DD` BRT-local strings — Set dedup is safe.
+    const allDates = Array.from(new Set([...completedDates, ...protectedDates])).sort().reverse();
+
+    if (allDates.length === 0) {
       return ok({ currentStreak: 0, longestStreak: 0, totalSessions: 0 });
     }
 
-    const { currentStreak, longestStreak } = computeStreaks(dates);
+    const { currentStreak, longestStreak } = computeStreaks(allDates);
 
     return ok({ currentStreak, longestStreak, totalSessions });
+  }
+
+  /** Returns up to `limit` most-recent completed session dates (BRT YYYY-MM-DD, newest first). */
+  async getRecentCompletedDates(userId: string, limit: number): Promise<string[]> {
+    const dates = await this.repo.getCompletedSessionDates(userId);
+    return dates.slice(0, limit);
   }
 }
 

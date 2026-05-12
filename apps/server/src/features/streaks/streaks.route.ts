@@ -1,13 +1,14 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { StreaksService } from "./streaks.service";
 import { StreaksRepository } from "./streaks.repository";
+import { ShieldsRepository } from "../shields/shields.repository";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
 
-const repo = new StreaksRepository(db);
-const service = new StreaksService(repo);
-
 export const streaksRoutes: FastifyPluginAsyncZod = async (fastify) => {
+  const repo = new StreaksRepository(db);
+  const shieldsRepo = new ShieldsRepository(db);
+  const service = new StreaksService(repo, shieldsRepo);
   // GET /streaks
   fastify.get(
     "/streaks",
