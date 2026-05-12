@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decodeAppStoreNotification, DecoderError, type DecodedAppStoreEvent } from "./app-store.decoder";
+import { decodeAppStoreNotification, DecoderError } from "./app-store.decoder";
 
 function makeJws(payload: object): string {
   // header.payload.signature — only the middle segment is used.
