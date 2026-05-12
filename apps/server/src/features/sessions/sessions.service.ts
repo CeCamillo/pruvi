@@ -206,6 +206,19 @@ export class SessionsService {
     const prevDate = new Date(dates[1] + "T03:00:00Z");
     const diffDays = Math.round((todayDate.getTime() - prevDate.getTime()) / 86_400_000);
     if (diffDays !== 2) return;
-    await this.shieldsService!.tryUseShield(userId, yesterdayStr);
+    const result = await this.shieldsService!.tryUseShield(userId, yesterdayStr);
+    if (result.used && this.dispatcher && this.streaksService) {
+      void this.enqueueProtectedStreakPush(userId).catch((e) => {
+        this.logger?.error?.({ err: e, userId }, "protect-streak push enqueue failed");
+      });
+    }
+  }
+
+  private async enqueueProtectedStreakPush(userId: string): Promise<void> {
+    const streaksResult = await this.streaksService!.getStreaks(userId);
+    if (streaksResult.isErr()) return;
+    const days = streaksResult.value.currentStreak;
+    if (days < 1) return;
+    await this.dispatcher!.sendStreakProtectedNotification(userId, days);
   }
 }

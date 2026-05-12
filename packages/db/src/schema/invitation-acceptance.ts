@@ -9,6 +9,7 @@ export const invitationAcceptance = pgTable(
     inviterId: text("inviter_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     inviteeId: text("invitee_id").notNull().unique().references(() => user.id, { onDelete: "cascade" }),
     acceptedAt: timestamp("accepted_at").defaultNow().notNull(),
+    rewardType: text("reward_type", { enum: ["xp", "shield"] }).notNull().default("xp"),
   },
   (table) => [index("invitation_acceptance_inviter_idx").on(table.inviterId)],
 );

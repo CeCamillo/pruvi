@@ -5,6 +5,7 @@ import {
   streakMilestone,
   masteryAchievement,
   overtaken,
+  streakProtected,
   type PushPayload,
 } from "./templates";
 import type { TokensService } from "./tokens.service";
@@ -77,6 +78,28 @@ export class Dispatcher {
         title: payload.title,
         body: payload.body,
         data: { kind: "overtaken" },
+      });
+    }
+  }
+
+  async sendStreakProtectedNotification(userId: string, streakDays: number): Promise<void> {
+    if (streakDays < 1) return;
+
+    const prefs = await this.deps.prefsRepo.get(userId);
+    // Reuse streakRemindersEnabled — same opt-out semantics as streak reminders.
+    if (!prefs?.streakRemindersEnabled) return;
+
+    const tokens = await this.deps.tokensService.listTokensForUser(userId);
+    if (tokens.length === 0) return;
+
+    const payload = streakProtected(streakDays);
+    for (let i = 0; i < tokens.length; i += EXPO_BATCH_SIZE) {
+      const chunk = tokens.slice(i, i + EXPO_BATCH_SIZE);
+      await this.deps.sendQueue.add("send", {
+        tokens: chunk,
+        title: payload.title,
+        body: payload.body,
+        data: { kind: "streak_protected" },
       });
     }
   }

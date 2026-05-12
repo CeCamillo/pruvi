@@ -90,6 +90,49 @@ describe("Dispatcher.sendOvertakenNotification", () => {
   });
 });
 
+describe("Dispatcher.sendStreakProtectedNotification", () => {
+  it("happy path: enqueues job with streak_protected kind when prefs enabled and tokens present", async () => {
+    const deps = makeDeps();
+    const d = new Dispatcher(deps as any);
+    await d.sendStreakProtectedNotification("u", 7);
+    expect(deps.sendQueue.add).toHaveBeenCalledTimes(1);
+    const [, payload] = deps.sendQueue.add.mock.calls[0];
+    expect(payload.tokens).toEqual(["ExponentPushToken[a]"]);
+    expect(payload.title).toBe("Seu escudo protegeu seu streak!");
+    expect(payload.body).toContain("7 dias");
+    expect(payload.data).toEqual({ kind: "streak_protected" });
+  });
+
+  it("opt-out: does not enqueue when streakRemindersEnabled is false", async () => {
+    const deps = makeDeps({
+      prefsRepo: {
+        get: vi.fn().mockResolvedValue({ notificationHour: 19, streakRemindersEnabled: false, achievementNotificationsEnabled: true }),
+      },
+    });
+    const d = new Dispatcher(deps as any);
+    await d.sendStreakProtectedNotification("u", 7);
+    expect(deps.sendQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("no tokens: does not enqueue when user has no tokens", async () => {
+    const deps = makeDeps({
+      tokensService: { listTokensForUser: vi.fn().mockResolvedValue([]) },
+    });
+    const d = new Dispatcher(deps as any);
+    await d.sendStreakProtectedNotification("u", 7);
+    expect(deps.sendQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("days < 1: returns immediately without calling prefs or tokens", async () => {
+    const deps = makeDeps();
+    const d = new Dispatcher(deps as any);
+    await d.sendStreakProtectedNotification("u", 0);
+    expect(deps.prefsRepo.get).not.toHaveBeenCalled();
+    expect(deps.tokensService.listTokensForUser).not.toHaveBeenCalled();
+    expect(deps.sendQueue.add).not.toHaveBeenCalled();
+  });
+});
+
 describe("Dispatcher.dispatchStreakReminder", () => {
   it("calls the eligibility query with hour and enqueues a send per chunk", async () => {
     const deps = makeDeps();

@@ -22,7 +22,7 @@ export class InvitationsService {
     Result<
       {
         inviter: { name: string; username: string | null };
-        xpAwarded: number;
+        reward: { type: "xp" | "shield"; xpAwarded: number; shieldGranted: boolean };
         friendshipCreated: true;
       },
       AppError
@@ -35,7 +35,12 @@ export class InvitationsService {
     if (await this.repo.hasAccepted(userId))
       return err(new ValidationError("You have already accepted an invitation"));
     try {
-      await this.repo.acceptInvitation(inviter.id, userId);
+      const reward = await this.repo.acceptInvitation(inviter.id, userId);
+      return ok({
+        inviter: { name: inviter.name, username: inviter.username },
+        reward: { type: reward.rewardType, xpAwarded: reward.xpAwarded, shieldGranted: reward.shieldGranted },
+        friendshipCreated: true as const,
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (
@@ -46,10 +51,5 @@ export class InvitationsService {
       }
       throw e;
     }
-    return ok({
-      inviter: { name: inviter.name, username: inviter.username },
-      xpAwarded: 100,
-      friendshipCreated: true as const,
-    });
   }
 }

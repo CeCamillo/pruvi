@@ -435,3 +435,120 @@ describe("SessionsService.completeSession shield auto-use hook", () => {
     );
   });
 });
+
+describe("SessionsService.maybeProtectMissedDay protected push hook", () => {
+  const now = new Date();
+  const todayStr = todayInBrt(now);
+  const twoDaysAgoStr = todayInBrt(new Date(now.getTime() - 2 * 86_400_000));
+
+  function makeSessionRepo(userId = "u1") {
+    return {
+      findSessionById: vi.fn().mockResolvedValue({ id: 1, userId, status: "active" }),
+      completeSession: vi.fn().mockResolvedValue({ id: 1, status: "completed" }),
+      readMasterySnapshot: vi.fn().mockResolvedValue(null),
+    } as any;
+  }
+
+  function makeTopicsService() {
+    return {
+      computeTransitions: vi.fn().mockReturnValue([]),
+      getCurrentMasteryAndNames: vi.fn().mockResolvedValue({ currentMap: new Map(), namesMap: new Map() }),
+      snapshotMastery: vi.fn(),
+    } as any;
+  }
+
+  it("used=true + currentStreak > 0 → sendStreakProtectedNotification called once", async () => {
+    const sendStreakProtectedNotification = vi.fn().mockResolvedValue(undefined);
+    const dispatcher = { sendStreakProtectedNotification } as any;
+    const shieldsService = { tryUseShield: vi.fn().mockResolvedValue({ used: true, balanceAfter: 0 }) } as any;
+    const streaksService = {
+      getStreaks: vi.fn().mockResolvedValue(ok({ currentStreak: 5, longestStreak: 5, totalSessions: 5 })),
+      getRecentCompletedDates: vi.fn().mockResolvedValue([todayStr, twoDaysAgoStr]),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      streaksService,
+      dispatcher,
+      shieldsService,
+    );
+
+    await service.completeSession("u1", 1, 5, 4);
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendStreakProtectedNotification).toHaveBeenCalledTimes(1);
+    expect(sendStreakProtectedNotification).toHaveBeenCalledWith("u1", 5);
+  });
+
+  it("used=false → dispatcher not called", async () => {
+    const sendStreakProtectedNotification = vi.fn().mockResolvedValue(undefined);
+    const dispatcher = { sendStreakProtectedNotification } as any;
+    const shieldsService = { tryUseShield: vi.fn().mockResolvedValue({ used: false, balanceAfter: null }) } as any;
+    const streaksService = {
+      getStreaks: vi.fn().mockResolvedValue(ok({ currentStreak: 5, longestStreak: 5, totalSessions: 5 })),
+      getRecentCompletedDates: vi.fn().mockResolvedValue([todayStr, twoDaysAgoStr]),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      streaksService,
+      dispatcher,
+      shieldsService,
+    );
+
+    await service.completeSession("u1", 1, 5, 4);
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendStreakProtectedNotification).not.toHaveBeenCalled();
+  });
+
+  it("used=true but currentStreak=0 → dispatcher not called (days<1 guard)", async () => {
+    const sendStreakProtectedNotification = vi.fn().mockResolvedValue(undefined);
+    const dispatcher = { sendStreakProtectedNotification } as any;
+    const shieldsService = { tryUseShield: vi.fn().mockResolvedValue({ used: true, balanceAfter: 0 }) } as any;
+    const streaksService = {
+      getStreaks: vi.fn().mockResolvedValue(ok({ currentStreak: 0, longestStreak: 3, totalSessions: 3 })),
+      getRecentCompletedDates: vi.fn().mockResolvedValue([todayStr, twoDaysAgoStr]),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      streaksService,
+      dispatcher,
+      shieldsService,
+    );
+
+    await service.completeSession("u1", 1, 5, 4);
+    await new Promise((r) => setImmediate(r));
+
+    expect(sendStreakProtectedNotification).not.toHaveBeenCalled();
+  });
+
+  it("used=true but dispatcher is null → no error thrown", async () => {
+    const shieldsService = { tryUseShield: vi.fn().mockResolvedValue({ used: true, balanceAfter: 0 }) } as any;
+    const streaksService = {
+      getStreaks: vi.fn().mockResolvedValue(ok({ currentStreak: 5, longestStreak: 5, totalSessions: 5 })),
+      getRecentCompletedDates: vi.fn().mockResolvedValue([todayStr, twoDaysAgoStr]),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      streaksService,
+      null, // dispatcher is null
+      shieldsService,
+    );
+
+    const result = await service.completeSession("u1", 1, 5, 4);
+    await new Promise((r) => setImmediate(r));
+
+    expect(result.isOk()).toBe(true);
+  });
+});

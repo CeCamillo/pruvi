@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { InvitationsService } from "./invitations.service";
 import type { InvitationsRepository } from "./invitations.repository";
 import { NotFoundError, ValidationError } from "../../../utils/errors";
@@ -8,7 +8,7 @@ function makeRepo(overrides?: Partial<InvitationsRepository>): InvitationsReposi
     ensureInviteCode: vi.fn().mockResolvedValue("abc12345"),
     findInviterByCode: vi.fn().mockResolvedValue(null),
     hasAccepted: vi.fn().mockResolvedValue(false),
-    acceptInvitation: vi.fn().mockResolvedValue(undefined),
+    acceptInvitation: vi.fn().mockResolvedValue({ rewardType: "xp", xpAwarded: 100, shieldGranted: false }),
     ...overrides,
   } as unknown as InvitationsRepository;
 }
@@ -94,7 +94,7 @@ describe("InvitationsService", () => {
           username: "bob",
         }),
         hasAccepted: vi.fn().mockResolvedValue(false),
-        acceptInvitation: vi.fn().mockResolvedValue(undefined),
+        acceptInvitation: vi.fn().mockResolvedValue({ rewardType: "xp", xpAwarded: 100, shieldGranted: false }),
       });
       const service = new InvitationsService(repo);
 
@@ -102,10 +102,33 @@ describe("InvitationsService", () => {
 
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
-        expect(result.value.xpAwarded).toBe(100);
+        expect(result.value.reward.xpAwarded).toBe(100);
+        expect(result.value.reward).toEqual({ type: "xp", xpAwarded: 100, shieldGranted: false });
         expect(result.value.friendshipCreated).toBe(true);
         expect(result.value.inviter.name).toBe("Bob");
         expect(result.value.inviter.username).toBe("bob");
+      }
+    });
+
+    it("returns shield reward shape when repo grants a shield", async () => {
+      const repo = makeRepo({
+        findInviterByCode: vi.fn().mockResolvedValue({
+          id: "inviter-id",
+          name: "Bob",
+          username: "bob",
+        }),
+        hasAccepted: vi.fn().mockResolvedValue(false),
+        acceptInvitation: vi.fn().mockResolvedValue({ rewardType: "shield", xpAwarded: 0, shieldGranted: true }),
+      });
+      const service = new InvitationsService(repo);
+
+      const result = await service.acceptInvitation("abc12345", "user-2");
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.reward.type).toBe("shield");
+        expect(result.value.reward).toEqual({ type: "shield", xpAwarded: 0, shieldGranted: true });
+        expect(result.value.friendshipCreated).toBe(true);
       }
     });
 

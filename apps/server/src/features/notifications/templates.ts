@@ -40,3 +40,10 @@ export function overtaken(overtakerName: string): PushPayload {
     body: `${overtakerName} acabou de te passar no ranking 🔥`,
   };
 }
+
+export function streakProtected(days: number): PushPayload {
+  return {
+    title: "Seu escudo protegeu seu streak!",
+    body: `Seu streak de ${days} dias foi salvo. Continue amanhã 💛`,
+  };
+}

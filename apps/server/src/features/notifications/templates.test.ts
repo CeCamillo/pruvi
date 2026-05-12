@@ -5,7 +5,7 @@ import {
   streakMilestone,
   masteryAchievement,
   overtaken,
-  type PushPayload,
+  streakProtected,
 } from "./templates";
 
 describe("notification templates", () => {
@@ -39,5 +39,19 @@ describe("overtaken", () => {
     const p = overtaken("Pedro");
     expect(p.title).toBe("Você foi ultrapassado!");
     expect(p.body).toContain("Pedro");
+  });
+});
+
+describe("streakProtected", () => {
+  it("returns pt-BR copy with the day count", () => {
+    const p = streakProtected(7);
+    expect(p.title).toBe("Seu escudo protegeu seu streak!");
+    expect(p.body).toContain("7 dias");
+  });
+
+  it("streakProtected(1) produces acceptable singular phrasing", () => {
+    const p = streakProtected(1);
+    expect(p.title).toBe("Seu escudo protegeu seu streak!");
+    expect(p.body).toContain("1 dias"); // Singular phrasing is acceptable per spec §7
   });
 });
