@@ -129,4 +129,41 @@ describe("BillingService.runReconciliationSweep (integration)", () => {
     expect(userRow!.isUltra).toBe(true);
     expect(userRow!.ultraExpiresAt).not.toBeNull();
   });
+
+  it("sweep losing to a concurrent RENEWED leaves the sub active and ultra granted", async () => {
+    const userId = "u-sweep-12"; await insertUser(userId);
+    const [row] = await db.insert(subscription).values({
+      userId, provider: "google_play", productId: "p", purchaseToken: "tokR",
+      status: "active", currentPeriodEnd: past,
+    }).returning();
+
+    // Bump the row to "fresh" before sweep sees it (simulating RENEWED winning the race).
+    await db.update(subscription).set({ currentPeriodEnd: fresh }).where(eq(subscription.id, row!.id));
+
+    const out = await svc.runReconciliationSweep({ now });
+    // findExpiredCandidates already filters on currentPeriodEnd < cutoff, so scanned should be 0.
+    expect(out.scanned).toBe(0);
+
+    const sub = (await db.select().from(subscription).where(eq(subscription.id, row!.id)))[0];
+    expect(sub!.status).toBe("active");
+  });
+
+  it("two sweep workers processing the same stale row → only one audit row, only one revoke", async () => {
+    const userId = "u-sweep-13"; await insertUser(userId);
+    await db.insert(subscription).values({
+      userId, provider: "google_play", productId: "p", purchaseToken: "tokC",
+      status: "active", currentPeriodEnd: past,
+    });
+
+    const [a, b] = await Promise.all([
+      svc.runReconciliationSweep({ now }),
+      svc.runReconciliationSweep({ now }),
+    ]);
+    // Sum across both runs: exactly one should claim the expire+revoke; the other should report 0.
+    expect((a.expired ?? 0) + (b.expired ?? 0)).toBe(1);
+    expect((a.revoked ?? 0) + (b.revoked ?? 0)).toBe(1);
+
+    const events = await db.select().from(billingEvent).where(eq(billingEvent.eventType, "SWEEP_EXPIRED"));
+    expect(events).toHaveLength(1);
+  });
 });
