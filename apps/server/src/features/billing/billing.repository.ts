@@ -226,7 +226,7 @@ export class BillingRepository {
       )
       .orderBy(asc(subscription.currentPeriodEnd))
       .limit(500);
-    return rows as SubscriptionRow[];
+    return rows.map((r) => this.toSubscription(r));
   }
 
   async expireSubscriptionIfStale(d: DbOrTx, id: number, cutoff: Date): Promise<SubscriptionRow | null> {
@@ -243,7 +243,8 @@ export class BillingRepository {
         ),
       )
       .returning();
-    return (rows[0] as SubscriptionRow | undefined) ?? null;
+    const row = rows[0];
+    return row ? this.toSubscription(row) : null;
   }
 
   private toSubscription(r: typeof subscription.$inferSelect): SubscriptionRow {
