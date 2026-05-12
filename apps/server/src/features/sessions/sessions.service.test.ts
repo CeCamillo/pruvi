@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ok } from "neverthrow";
+import { todayInBrt } from "@pruvi/shared";
 import { SessionsService } from "./sessions.service";
 import { ValidationError, NotFoundError } from "../../utils/errors";
 
@@ -286,5 +287,151 @@ describe("SessionsService.completeSession returns mastery transitions", () => {
     const result = await service.completeSession("u1", 9, 0, 0);
     const { transitions } = result._unsafeUnwrap();
     expect(transitions).toEqual([]);
+  });
+});
+
+describe("SessionsService.completeSession shield auto-use hook", () => {
+  const now = new Date();
+  const todayStr = todayInBrt(now);
+  const yesterdayStr = todayInBrt(new Date(now.getTime() - 86_400_000));
+  const twoDaysAgoStr = todayInBrt(new Date(now.getTime() - 2 * 86_400_000));
+  const threeDaysAgoStr = todayInBrt(new Date(now.getTime() - 3 * 86_400_000));
+
+  function makeSessionRepo(userId = "u1") {
+    return {
+      findSessionById: vi.fn().mockResolvedValue({ id: 1, userId, status: "active" }),
+      completeSession: vi.fn().mockResolvedValue({ id: 1, status: "completed" }),
+      readMasterySnapshot: vi.fn().mockResolvedValue(null),
+    } as any;
+  }
+
+  function makeTopicsService() {
+    return {
+      computeTransitions: vi.fn().mockReturnValue([]),
+      getCurrentMasteryAndNames: vi.fn().mockResolvedValue({ currentMap: new Map(), namesMap: new Map() }),
+      snapshotMastery: vi.fn(),
+    } as any;
+  }
+
+  it("calls tryUseShield with yesterday's BRT date when prev-completed is 2 days ago", async () => {
+    const tryUseShield = vi.fn().mockResolvedValue({ used: true, balanceAfter: 0 });
+    const shieldsService = { tryUseShield } as any;
+    const streaksService = {
+      getStreaks: vi.fn().mockResolvedValue(ok({ currentStreak: 1, longestStreak: 1, totalSessions: 1 })),
+      getRecentCompletedDates: vi.fn().mockResolvedValue([todayStr, twoDaysAgoStr]),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      streaksService,
+      null,
+      shieldsService,
+    );
+
+    const result = await service.completeSession("u1", 1, 5, 4);
+    expect(result.isOk()).toBe(true);
+
+    // Flush microtasks so fire-and-forget resolves
+    await new Promise((r) => setImmediate(r));
+
+    expect(tryUseShield).toHaveBeenCalledWith("u1", yesterdayStr);
+  });
+
+  it("does NOT call tryUseShield when gap is 1 day", async () => {
+    const tryUseShield = vi.fn().mockResolvedValue({ used: false, balanceAfter: null });
+    const shieldsService = { tryUseShield } as any;
+    const streaksService = {
+      getStreaks: vi.fn().mockResolvedValue(ok({ currentStreak: 2, longestStreak: 2, totalSessions: 2 })),
+      getRecentCompletedDates: vi.fn().mockResolvedValue([todayStr, yesterdayStr]),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      streaksService,
+      null,
+      shieldsService,
+    );
+
+    await service.completeSession("u1", 1, 5, 4);
+    await new Promise((r) => setImmediate(r));
+
+    expect(tryUseShield).not.toHaveBeenCalled();
+  });
+
+  it("does NOT call tryUseShield when gap is 3+ days", async () => {
+    const tryUseShield = vi.fn().mockResolvedValue({ used: false, balanceAfter: null });
+    const shieldsService = { tryUseShield } as any;
+    const streaksService = {
+      getStreaks: vi.fn().mockResolvedValue(ok({ currentStreak: 1, longestStreak: 1, totalSessions: 1 })),
+      getRecentCompletedDates: vi.fn().mockResolvedValue([todayStr, threeDaysAgoStr]),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      streaksService,
+      null,
+      shieldsService,
+    );
+
+    await service.completeSession("u1", 1, 5, 4);
+    await new Promise((r) => setImmediate(r));
+
+    expect(tryUseShield).not.toHaveBeenCalled();
+  });
+
+  it("does NOT throw when shieldsService is not injected", async () => {
+    const streaksService = {
+      getStreaks: vi.fn().mockResolvedValue(ok({ currentStreak: 1, longestStreak: 1, totalSessions: 1 })),
+      getRecentCompletedDates: vi.fn().mockResolvedValue([todayStr, twoDaysAgoStr]),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      streaksService,
+      null,
+      // no shieldsService
+    );
+
+    const result = await service.completeSession("u1", 1, 5, 4);
+    await new Promise((r) => setImmediate(r));
+
+    expect(result.isOk()).toBe(true);
+  });
+
+  it("fire-and-forget: completeSession returns ok even when tryUseShield rejects", async () => {
+    const tryUseShield = vi.fn().mockRejectedValue(new Error("shield DB error"));
+    const shieldsService = { tryUseShield } as any;
+    const streaksService = {
+      getStreaks: vi.fn().mockResolvedValue(ok({ currentStreak: 1, longestStreak: 1, totalSessions: 1 })),
+      getRecentCompletedDates: vi.fn().mockResolvedValue([todayStr, twoDaysAgoStr]),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      streaksService,
+      null,
+      shieldsService,
+    );
+
+    const result = await service.completeSession("u1", 1, 5, 4);
+    expect(result.isOk()).toBe(true);
+
+    // Flush microtasks — tryUseShield rejects but is swallowed by the .catch
+    await new Promise((r) => setImmediate(r));
+
+    // completeSession already returned ok before shield hook ran
+    expect(result._unsafeUnwrap()).toEqual(
+      expect.objectContaining({ session: expect.objectContaining({ status: "completed" }) }),
+    );
   });
 });

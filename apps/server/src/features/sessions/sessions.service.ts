@@ -1,4 +1,6 @@
 import { err, ok, type Result } from "neverthrow";
+import type { FastifyBaseLogger } from "fastify";
+import { todayInBrt } from "@pruvi/shared";
 import type { AppError } from "../../utils/errors";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import type { SessionsRepository } from "./sessions.repository";
@@ -6,6 +8,7 @@ import type { QuestionsService } from "../questions/questions.service";
 import type { TopicsService } from "../topics/topics.service";
 import type { Dispatcher } from "../notifications/dispatcher";
 import type { StreaksService } from "../streaks/streaks.service";
+import type { ShieldsService } from "../shields/shields.service";
 
 type SessionRow = NonNullable<Awaited<ReturnType<SessionsRepository["findTodaySession"]>>>;
 type QuestionItem = { id: number; subtopicId: number; [key: string]: unknown };
@@ -17,6 +20,8 @@ export class SessionsService {
     private topicsService: TopicsService,
     private streaksService: StreaksService | null = null,
     private dispatcher: Dispatcher | null = null,
+    private shieldsService?: ShieldsService,
+    private logger?: FastifyBaseLogger,
   ) {}
 
   /** Start or resume today's session */
@@ -165,20 +170,42 @@ export class SessionsService {
               const kind = `${r.value.currentStreak}-day-streak` as "7-day-streak" | "30-day-streak";
               this.dispatcher!
                 .sendAchievementNotification(userId, kind)
-                .catch((e) => console.error("streak achievement push failed", e));
+                .catch((e) => this.logger?.error?.({ err: e, userId, kind }, "streak achievement push failed"));
             }
           })
-          .catch((e) => console.error("streak read failed in achievement hook", e));
+          .catch((e) => this.logger?.error?.({ err: e, userId }, "streak read failed in achievement hook"));
       }
       for (const t of transitions) {
         if (t.to === "quase_mestre") {
           this.dispatcher
             .sendAchievementNotification(userId, "quase-mestre", { subtopicName: t.name })
-            .catch((e) => console.error("mastery achievement push failed", e));
+            .catch((e) => this.logger?.error?.({ err: e, userId, subtopicName: t.name }, "mastery achievement push failed"));
         }
       }
     }
 
+    // Fire-and-forget shield auto-use hook
+    if (this.shieldsService && this.streaksService) {
+      void this.maybeProtectMissedDay(userId).catch((e) => {
+        this.logger?.error?.({ err: e, userId }, "shield auto-use failed");
+      });
+    }
+
     return ok({ session: completed, transitions });
+  }
+
+  private async maybeProtectMissedDay(userId: string): Promise<void> {
+    const now = new Date();
+    const todayStr = todayInBrt(now);
+    const yesterdayStr = todayInBrt(new Date(now.getTime() - 86_400_000));
+    const dates = await this.streaksService!.getRecentCompletedDates(userId, 2);
+    if (dates.length < 2) return;
+    if (dates[0] !== todayStr) return;
+    // Both dates are YYYY-MM-DD BRT strings — convert to date-aware Date at midnight BRT (UTC 03:00).
+    const todayDate = new Date(todayStr + "T03:00:00Z");
+    const prevDate = new Date(dates[1] + "T03:00:00Z");
+    const diffDays = Math.round((todayDate.getTime() - prevDate.getTime()) / 86_400_000);
+    if (diffDays !== 2) return;
+    await this.shieldsService!.tryUseShield(userId, yesterdayStr);
   }
 }

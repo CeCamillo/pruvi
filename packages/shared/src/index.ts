@@ -15,3 +15,4 @@ export * from "./notifications";
 export * from "./social";
 export * from "./weekly";
 export * from "./ultra";
+export * from "./shields";

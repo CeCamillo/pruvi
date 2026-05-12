@@ -14,6 +14,8 @@ import { SweepRepository } from "../notifications/sweep.repository";
 import { Dispatcher } from "../notifications/dispatcher";
 import { StreaksRepository } from "../streaks/streaks.repository";
 import { StreaksService } from "../streaks/streaks.service";
+import { ShieldsRepository } from "../shields/shields.repository";
+import { ShieldsService } from "../shields/shields.service";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
 
@@ -31,6 +33,8 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
   const sweepRepo = new SweepRepository(db);
   const streaksRepo = new StreaksRepository(db);
   const streaksService = new StreaksService(streaksRepo);
+  const shieldsRepo = new ShieldsRepository(db);
+  const shieldsService = new ShieldsService(shieldsRepo);
   const dispatcher = fastify.queues.notificationsSend
     ? new Dispatcher({
         tokensService,
@@ -45,6 +49,8 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     topicsService,
     streaksService,
     dispatcher,
+    shieldsService,
+    fastify.log,
   );
   // POST /sessions/start
   fastify.post(
@@ -144,10 +150,13 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       );
       const { session, transitions } = unwrapResult(result).data;
 
-      // Invalidate caches that depend on session completion
+      // Invalidate caches that depend on session completion.
+      // `shields:` is invalidated unconditionally: if the auto-use hook fires (fire-and-forget),
+      // the shield balance changed; if it doesn't fire, the del is a cheap no-op.
       await Promise.all([
         fastify.cache.del(`session-today:${request.userId}`),
         fastify.cache.del(`streaks:${request.userId}`),
+        fastify.cache.del(`shields:${request.userId}`),
       ]);
 
       // Enqueue next session pre-generation

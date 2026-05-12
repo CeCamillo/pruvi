@@ -1,26 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { todayInBrt } from "@pruvi/shared";
 import { StreaksService } from "./streaks.service";
 
+// BRT-local "today" — matches what the repo returns and what computeStreaks compares against.
 function todayStr() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
+  return todayInBrt(new Date());
 }
 
 function daysAgo(n: number) {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return todayInBrt(new Date(Date.now() - n * 86_400_000));
 }
 
-function createMocks() {
+function createMocks(shieldsProtectedDates: string[] = []) {
   const repo = {
     getCompletedSessionDates: vi.fn(),
     countCompletedSessions: vi.fn(),
   };
-  const service = new StreaksService(repo as any);
-  return { repo, service };
+  const shieldsRepo = {
+    listProtectedDates: vi.fn().mockResolvedValue(shieldsProtectedDates),
+  };
+  const service = new StreaksService(repo as any, shieldsRepo as any);
+  return { repo, shieldsRepo, service };
 }
 
 describe("StreaksService", () => {
@@ -84,5 +84,37 @@ describe("StreaksService", () => {
     const value = result._unsafeUnwrap();
     expect(value.currentStreak).toBe(2);
     expect(value.longestStreak).toBe(2);
+  });
+
+  describe("shield protected dates merge", () => {
+    it("protected yesterday fills gap: today + day-before-yesterday + protected yesterday = streak 3", async () => {
+      // completed: today, 2 days ago (gap at yesterday)
+      // protected: yesterday → merged → today, yesterday, 2daysAgo → streak = 3
+      const { repo: r, service: s } = createMocks([daysAgo(1)]);
+      r.getCompletedSessionDates.mockResolvedValue([todayStr(), daysAgo(2)]);
+      r.countCompletedSessions.mockResolvedValue(2);
+
+      const result = await s.getStreaks("user-1");
+
+      expect(result.isOk()).toBe(true);
+      const value = result._unsafeUnwrap();
+      expect(value.currentStreak).toBe(3);
+      expect(value.longestStreak).toBe(3);
+      // totalSessions still uses countCompletedSessions — protected dates don't count
+      expect(value.totalSessions).toBe(2);
+    });
+
+    it("without protected dates, today + day-before-yesterday = streak 1 (gap breaks it)", async () => {
+      // No shield — gap at yesterday breaks streak, only today counts
+      const { repo: r, service: s } = createMocks([]);
+      r.getCompletedSessionDates.mockResolvedValue([todayStr(), daysAgo(2)]);
+      r.countCompletedSessions.mockResolvedValue(2);
+
+      const result = await s.getStreaks("user-1");
+
+      expect(result.isOk()).toBe(true);
+      const value = result._unsafeUnwrap();
+      expect(value.currentStreak).toBe(1);
+    });
   });
 });

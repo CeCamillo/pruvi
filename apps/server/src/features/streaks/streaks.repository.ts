@@ -7,11 +7,13 @@ type DbClient = typeof db;
 export class StreaksRepository {
   constructor(private db: DbClient) {}
 
-  /** Get all completed session dates for a user, ordered newest first */
+  /** Get all completed session dates for a user, ordered newest first.
+   *  Returns DISTINCT BRT-local calendar dates (one row per day) as YYYY-MM-DD strings.
+   */
   async getCompletedSessionDates(userId: string) {
     const rows = await this.db
       .selectDistinct({
-        date: sql<string>`${dailySession.createdAt}::date`.as("date"),
+        date: sql<string>`(${dailySession.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`.as("date"),
       })
       .from(dailySession)
       .where(
@@ -20,7 +22,7 @@ export class StreaksRepository {
           eq(dailySession.status, "completed")
         )
       )
-      .orderBy(desc(sql`${dailySession.createdAt}::date`));
+      .orderBy(desc(sql`(${dailySession.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`));
 
     return rows.map((r) => r.date);
   }

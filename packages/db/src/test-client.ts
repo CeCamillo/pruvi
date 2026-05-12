@@ -31,11 +31,24 @@ export async function createTestDb() {
       is_ultra BOOLEAN NOT NULL DEFAULT false,
       ultra_expires_at TIMESTAMP,
       CONSTRAINT user_ultra_expiry_chk CHECK (ultra_expires_at IS NULL OR is_ultra = true),
+      streak_shields_available INTEGER NOT NULL DEFAULT 0 CONSTRAINT user_streak_shields_chk CHECK (streak_shields_available >= 0 AND streak_shields_available <= 1),
+      last_shield_grant_at TIMESTAMP,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
     CREATE INDEX IF NOT EXISTS "user_ultra_expiry_idx" ON "user" (ultra_expires_at) WHERE is_ultra = true;
+
+    CREATE TABLE IF NOT EXISTS "streak_shield_usage" (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      protected_date DATE NOT NULL,
+      used_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS "streak_shield_usage_user_date_idx" ON "streak_shield_usage" (user_id, protected_date);
+
+    CREATE INDEX IF NOT EXISTS "streak_shield_usage_user_idx" ON "streak_shield_usage" (user_id);
 
     CREATE TABLE IF NOT EXISTS "session" (
       id TEXT PRIMARY KEY,

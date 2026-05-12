@@ -30,6 +30,8 @@ export const user = pgTable("user", {
   notificationHour: integer("notification_hour").notNull().default(19),
   streakRemindersEnabled: boolean("streak_reminders_enabled").notNull().default(true),
   achievementNotificationsEnabled: boolean("achievement_notifications_enabled").notNull().default(true),
+  streakShieldsAvailable: integer("streak_shields_available").notNull().default(0),
+  lastShieldGrantAt: timestamp("last_shield_grant_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
