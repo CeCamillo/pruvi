@@ -58,3 +58,34 @@ export const GooglePlayLinkResponseSchema = z.object({
   }),
 });
 export type GooglePlayLinkResponse = z.infer<typeof GooglePlayLinkResponseSchema>;
+
+export const APP_STORE_NOTIFICATION_TYPES = [
+  "SUBSCRIBED",
+  "DID_RENEW",
+  "DID_FAIL_TO_RENEW",
+  "EXPIRED",
+  "GRACE_PERIOD_EXPIRED",
+  "REFUND",
+  "REFUND_DECLINED",
+  "REFUND_REVERSED",
+  "REVOKE",
+  "DID_CHANGE_RENEWAL_STATUS",
+  "DID_CHANGE_RENEWAL_PREF",
+  "OFFER_REDEEMED",
+  "PRICE_INCREASE",
+  "RENEWAL_EXTENDED",
+  "CONSUMPTION_REQUEST",
+  "ONE_TIME_CHARGE",
+  "TEST",
+] as const;
+export type AppStoreNotificationType = (typeof APP_STORE_NOTIFICATION_TYPES)[number];
+
+export const AppStoreLinkBodySchema = z.object({
+  originalTransactionId: z.string().min(1),
+  productId: z.string().min(1),
+});
+export type AppStoreLinkBody = z.infer<typeof AppStoreLinkBodySchema>;
+
+/** Type alias — Apple link response shape is identical to Google's (provider-agnostic). */
+export const AppStoreLinkResponseSchema = GooglePlayLinkResponseSchema;
+export type AppStoreLinkResponse = z.infer<typeof AppStoreLinkResponseSchema>;

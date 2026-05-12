@@ -21,6 +21,7 @@ export const env = createEnv({
     EXPO_ACCESS_TOKEN: z.string().optional(),
     ADMIN_API_TOKEN: z.string().min(16).optional(),
     GOOGLE_PLAY_WEBHOOK_TOKEN: z.string().min(16).optional(),
+    APP_STORE_WEBHOOK_TOKEN: z.string().min(32).optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

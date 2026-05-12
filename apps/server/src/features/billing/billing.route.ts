@@ -49,7 +49,7 @@ export const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
       preHandler: [webhookGuard],
     },
     async (request) => {
-      const result = await service.processWebhookEnvelope(request.body);
+      const result = await service.processGooglePlayEnvelope(request.body);
       if (result.isErr()) {
         const error = result.error;
         // For MALFORMED_ENVELOPE we still return 200 so Pub/Sub stops retrying.

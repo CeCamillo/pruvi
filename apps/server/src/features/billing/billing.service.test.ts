@@ -52,7 +52,7 @@ describe("BillingService", () => {
   it("PURCHASED on linked subscription: active + grant called with ~now+30d", async () => {
     const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() };
     const { service, ultra, repo } = buildSut({ findSubscription: linked });
-    const r = await service.processWebhookEnvelope(buildEnvelope(4));
+    const r = await service.processGooglePlayEnvelope(buildEnvelope(4));
     expect(r.isOk()).toBe(true);
     expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "active" }));
     expect(ultra.grant).toHaveBeenCalledTimes(1);
@@ -64,7 +64,7 @@ describe("BillingService", () => {
   // Case 2
   it("PURCHASED with NO existing subscription: orphan created, NO grant", async () => {
     const { service, ultra, repo } = buildSut({ findSubscription: null });
-    await service.processWebhookEnvelope(buildEnvelope(4));
+    await service.processGooglePlayEnvelope(buildEnvelope(4));
     expect(repo.createOrphanSubscription).toHaveBeenCalled();
     expect(ultra.grant).not.toHaveBeenCalled();
   });
@@ -73,7 +73,7 @@ describe("BillingService", () => {
   it("EXPIRED with no other active subs: revoke called", async () => {
     const active: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
     const { service, ultra } = buildSut({ findSubscription: active, hasOtherActive: false });
-    await service.processWebhookEnvelope(buildEnvelope(13));
+    await service.processGooglePlayEnvelope(buildEnvelope(13));
     expect(ultra.revoke).toHaveBeenCalledWith("u1");
   });
 
@@ -81,7 +81,7 @@ describe("BillingService", () => {
   it("EXPIRED with another active subscription: revoke NOT called (multi-sub guard)", async () => {
     const active: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
     const { service, ultra, repo } = buildSut({ findSubscription: active, hasOtherActive: true });
-    await service.processWebhookEnvelope(buildEnvelope(13));
+    await service.processGooglePlayEnvelope(buildEnvelope(13));
     expect(repo.hasOtherActiveSubscription).toHaveBeenCalledWith(expect.anything(), "u1", 10);
     expect(ultra.revoke).not.toHaveBeenCalled();
   });
@@ -91,7 +91,7 @@ describe("BillingService", () => {
     const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() };
     const farFuture = new Date(Date.now() + 365 * 86400000); // 1 year out
     const { service, ultra } = buildSut({ findSubscription: linked, maxOtherEnd: farFuture });
-    await service.processWebhookEnvelope(buildEnvelope(4));
+    await service.processGooglePlayEnvelope(buildEnvelope(4));
     expect(ultra.grant).toHaveBeenCalledWith("u1", farFuture);
   });
 
@@ -99,7 +99,7 @@ describe("BillingService", () => {
   it("CANCELED: state=canceled, no Ultra change", async () => {
     const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
     const { service, ultra, repo } = buildSut({ findSubscription: linked });
-    await service.processWebhookEnvelope(buildEnvelope(3));
+    await service.processGooglePlayEnvelope(buildEnvelope(3));
     expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "canceled" }));
     expect(ultra.grant).not.toHaveBeenCalled();
     expect(ultra.revoke).not.toHaveBeenCalled();
@@ -108,14 +108,14 @@ describe("BillingService", () => {
   // Case 6
   it("Duplicate messageId: second call no-op (insertEvent returns null)", async () => {
     const { service, ultra } = buildSut({ insertEvent: null });
-    await service.processWebhookEnvelope(buildEnvelope(4));
+    await service.processGooglePlayEnvelope(buildEnvelope(4));
     expect(ultra.grant).not.toHaveBeenCalled();
   });
 
   // Case 7
   it("Unknown notificationType: UNKNOWN_99 event recorded, no state mutation", async () => {
     const { service, ultra, repo } = buildSut();
-    await service.processWebhookEnvelope(buildEnvelope(99));
+    await service.processGooglePlayEnvelope(buildEnvelope(99));
     expect(repo.insertEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "UNKNOWN_99" }));
     expect(repo.updateSubscriptionState).not.toHaveBeenCalled();
     expect(ultra.grant).not.toHaveBeenCalled();

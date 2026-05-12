@@ -5,6 +5,8 @@ import {
   GOOGLE_PLAY_NOTIFICATION_TYPES,
   GooglePlayLinkBodySchema,
   DEFAULT_SUBSCRIPTION_PERIOD_MS,
+  APP_STORE_NOTIFICATION_TYPES,
+  AppStoreLinkBodySchema,
 } from "./billing";
 
 describe("billing shared module", () => {
@@ -32,5 +34,17 @@ describe("billing shared module", () => {
   it("validates link body shape", () => {
     expect(GooglePlayLinkBodySchema.safeParse({ purchaseToken: "t", productId: "pruvi_ultra_monthly" }).success).toBe(true);
     expect(GooglePlayLinkBodySchema.safeParse({ purchaseToken: "", productId: "x" }).success).toBe(false);
+  });
+
+  it("declares all 17 app store notification types", () => {
+    expect(APP_STORE_NOTIFICATION_TYPES).toHaveLength(17);
+    expect(APP_STORE_NOTIFICATION_TYPES).toContain("SUBSCRIBED");
+    expect(APP_STORE_NOTIFICATION_TYPES).toContain("REFUND_REVERSED");
+    expect(APP_STORE_NOTIFICATION_TYPES).toContain("ONE_TIME_CHARGE");
+  });
+
+  it("validates app store link body shape", () => {
+    expect(AppStoreLinkBodySchema.safeParse({ originalTransactionId: "200000000000001", productId: "pruvi_ultra_monthly" }).success).toBe(true);
+    expect(AppStoreLinkBodySchema.safeParse({ originalTransactionId: "", productId: "x" }).success).toBe(false);
   });
 });

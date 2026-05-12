@@ -28,7 +28,7 @@ export class BillingService {
 
   /** Webhook entry point. Returns the response payload; always 200 on accepted shapes.
    *  Auth + envelope-shape validation happens in the route. */
-  async processWebhookEnvelope(envelope: unknown): Promise<Result<{ messageId: string; kind: string }, AppError>> {
+  async processGooglePlayEnvelope(envelope: unknown): Promise<Result<{ messageId: string; kind: string }, AppError>> {
     let decoded: DecodedGooglePlayEvent;
     try {
       decoded = decodeGooglePlayPubSubEnvelope(envelope);
