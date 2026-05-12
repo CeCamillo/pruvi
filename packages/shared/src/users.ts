@@ -17,3 +17,15 @@ export const ProfileResponseSchema = z.object({
 });
 
 export type ProfileResponse = z.infer<typeof ProfileResponseSchema>;
+
+/** PATCH /users/me/invite-reward-preference — body */
+export const InviteRewardPreferenceBodySchema = z.object({
+  preference: z.enum(["xp", "shield"]),
+});
+export type InviteRewardPreferenceBody = z.infer<typeof InviteRewardPreferenceBodySchema>;
+
+/** PATCH /users/me/invite-reward-preference — response */
+export const InviteRewardPreferenceResponseSchema = z.object({
+  preference: z.enum(["xp", "shield"]),
+});
+export type InviteRewardPreferenceResponse = z.infer<typeof InviteRewardPreferenceResponseSchema>;
