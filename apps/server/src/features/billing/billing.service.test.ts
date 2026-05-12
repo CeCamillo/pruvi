@@ -4,6 +4,7 @@ import type { BillingRepository, SubscriptionRow, BillingEventRow } from "./bill
 import type { UltraService } from "../ultra/ultra.service";
 import type { db as DbClient } from "@pruvi/db";
 import type { GooglePlayApiClient } from "./google-play.api-client";
+import { NoOpJwsVerifier, JwsVerificationError, type IJwsVerifier } from "./app-store.jws-verifier";
 
 function makeStubApiClient(realExpiry: Date | null = null): GooglePlayApiClient {
   return {
@@ -24,6 +25,7 @@ function buildSut(opts: {
   upsertLinked?: { subscription: SubscriptionRow; created: boolean };
   claimOrphan?: SubscriptionRow;
   apiClient?: GooglePlayApiClient;
+  jwsVerifier?: IJwsVerifier;
 } = {}) {
   const repo = {
     insertEvent: vi.fn().mockResolvedValue(opts.insertEvent ?? { id: 1, provider: "google_play", messageId: "m1", eventType: "PURCHASED", purchaseToken: "tok", payload: {}, receivedAt: new Date(), processedAt: null, processingError: null }),
@@ -45,8 +47,9 @@ function buildSut(opts: {
     transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => cb(repo)),
   } as unknown as typeof DbClient;
   const apiClient = opts.apiClient ?? makeStubApiClient(null);
-  const service = new BillingService(db, repo as unknown as BillingRepository, ultra as unknown as UltraService, apiClient, null);
-  return { service, repo, ultra, db, apiClient };
+  const jwsVerifier = opts.jwsVerifier ?? new NoOpJwsVerifier();
+  const service = new BillingService(db, repo as unknown as BillingRepository, ultra as unknown as UltraService, apiClient, null, jwsVerifier);
+  return { service, repo, ultra, db, apiClient, jwsVerifier };
 }
 
 function buildEnvelope(notificationType: number, purchaseToken = "tok", messageId = "msg-1") {
@@ -418,5 +421,14 @@ describe("BillingService — App Store", () => {
     const r = await service.linkAppStorePurchase("u1", { originalTransactionId: "tok", productId: "p" });
     expect(r.isOk()).toBe(true);
     if (r.isOk()) expect(r.value.subscription.id).toBe(10);
+  });
+
+  // Case 14: JWS verifier rejection → MALFORMED_ENVELOPE
+  it("App Store webhook with verifier rejection returns MALFORMED_ENVELOPE", async () => {
+    const rejecting: IJwsVerifier = { verify: () => { throw new JwsVerificationError("signature invalid"); } };
+    const { service } = buildSut({ jwsVerifier: rejecting });
+    const r = await service.processAppStoreEnvelope({ signedPayload: "x.y.z" });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error.code).toBe("MALFORMED_ENVELOPE");
   });
 });

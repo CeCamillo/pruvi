@@ -4,6 +4,7 @@ import type { BillingRepository, SubscriptionRow } from "./billing.repository";
 import type { UltraService } from "../ultra/ultra.service";
 import type { db as DbClient } from "@pruvi/db";
 import type { GooglePlayApiClient } from "./google-play.api-client";
+import { NoOpJwsVerifier } from "./app-store.jws-verifier";
 
 type FakeDb = Pick<typeof DbClient, "transaction">;
 
@@ -40,7 +41,7 @@ describe("BillingService.runReconciliationSweep", () => {
     } as unknown as FakeDb as typeof DbClient;
 
     const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
-    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null, new NoOpJwsVerifier());
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 1, expired: 1, revoked: 1 });
@@ -60,7 +61,7 @@ describe("BillingService.runReconciliationSweep", () => {
     const fakeDb = { transaction: async <T,>(fn: (tx: unknown) => Promise<T>) => fn({}) } as unknown as FakeDb as typeof DbClient;
 
     const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
-    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null, new NoOpJwsVerifier());
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 1, expired: 1, revoked: 0 });
@@ -80,7 +81,7 @@ describe("BillingService.runReconciliationSweep", () => {
     const fakeDb = { transaction: async <T,>(fn: (tx: unknown) => Promise<T>) => fn({}) } as unknown as FakeDb as typeof DbClient;
 
     const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
-    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null, new NoOpJwsVerifier());
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 1, expired: 0, revoked: 0 });
@@ -101,7 +102,7 @@ describe("BillingService.runReconciliationSweep", () => {
     const fakeDb = { transaction: async <T,>(fn: (tx: unknown) => Promise<T>) => fn({}) } as unknown as FakeDb as typeof DbClient;
 
     const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
-    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null, new NoOpJwsVerifier());
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 1, expired: 0, revoked: 0 });
@@ -122,7 +123,7 @@ describe("BillingService.runReconciliationSweep", () => {
     const fakeDb = { transaction: txSpy } as unknown as FakeDb as typeof DbClient;
 
     const apiClient = { getSubscription: vi.fn() } as unknown as GooglePlayApiClient;
-    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null);
+    const svc = new BillingService(fakeDb, repo, ultra, apiClient, null, new NoOpJwsVerifier());
     const out = await svc.runReconciliationSweep({ now });
 
     expect(out).toEqual({ scanned: 2, expired: 2, revoked: 2 });

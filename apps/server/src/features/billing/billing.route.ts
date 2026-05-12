@@ -13,6 +13,7 @@ import { UltraRepository } from "../ultra/ultra.repository";
 import { UltraService } from "../ultra/ultra.service";
 import { loadServiceAccountFromEnv } from "./google-play.service-account";
 import { GooglePlayApiClient } from "./google-play.api-client";
+import { AppStoreJwsVerifier } from "./app-store.jws-verifier";
 
 const repo = new BillingRepository();
 const ultra = new UltraService(new UltraRepository(db));
@@ -55,7 +56,8 @@ export const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
   // Construct the api client inside the plugin closure so fastify.log (pino) is available
   // — pino-structured logs are required for production observability per spec §4.1.
   const apiClient = new GooglePlayApiClient(loadServiceAccountFromEnv(env), { logger: fastify.log });
-  const service = new BillingService(db, repo, ultra, apiClient, env.GOOGLE_PLAY_PACKAGE_NAME ?? null);
+  const jwsVerifier = AppStoreJwsVerifier.fromBundledRoot();
+  const service = new BillingService(db, repo, ultra, apiClient, env.GOOGLE_PLAY_PACKAGE_NAME ?? null, jwsVerifier);
 
   fastify.post(
     "/webhooks/google-play",

@@ -8,6 +8,7 @@ import { BillingRepository } from "./billing.repository";
 import { UltraService } from "../ultra/ultra.service";
 import { UltraRepository } from "../ultra/ultra.repository";
 import { GooglePlayApiClient } from "./google-play.api-client";
+import { NoOpJwsVerifier } from "./app-store.jws-verifier";
 
 // There is no `seedUser` helper. Copy the local `insertUser(id)` pattern verbatim
 // from `billing.repository.integration.test.ts:15`:
@@ -35,7 +36,7 @@ describe("BillingService.runReconciliationSweep (integration)", () => {
     const repo = new BillingRepository();
     const ultra = new UltraService(new UltraRepository(db));   // canonical construction per billing.route.ts:16
     const apiClient = new GooglePlayApiClient(null);
-    svc = new BillingService(db, repo, ultra, apiClient, null);
+    svc = new BillingService(db, repo, ultra, apiClient, null, new NoOpJwsVerifier());
   });
   afterAll(async () => teardownTestDb());
 
