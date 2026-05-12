@@ -89,4 +89,9 @@ describe("decodeGooglePlayPubSubEnvelope", () => {
     const env = buildEnvelope({ packageName: "x" });
     expect(() => decodeGooglePlayPubSubEnvelope(env)).toThrow(DecoderError);
   });
+
+  it("throws on malformed subscriptionNotification (missing purchaseToken)", () => {
+    const env = buildEnvelope({ subscriptionNotification: { notificationType: 4 } });
+    expect(() => decodeGooglePlayPubSubEnvelope(env)).toThrow(DecoderError);
+  });
 });
