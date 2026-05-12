@@ -9,6 +9,7 @@ export interface RawRankingRow extends Record<string, unknown> {
   username: string | null;
   image: string | null;
   weekly_xp: number;
+  is_ultra: boolean;
 }
 
 export class RankingRepository {
@@ -22,13 +23,13 @@ export class RankingRepository {
         WHERE (requester_id = ${userId} OR recipient_id = ${userId}) AND status = 'accepted'
       )
       SELECT
-        u.id AS user_id, u.name, u.username, u.image,
+        u.id AS user_id, u.name, u.username, u.image, u.is_ultra,
         COALESCE(SUM(rl.xp_earned), 0)::int AS weekly_xp
       FROM "user" u
       LEFT JOIN review_log rl
         ON rl.user_id = u.id AND rl.reviewed_at >= ${weekStart}
       WHERE u.id = ${userId} OR u.id IN (SELECT friend_id FROM friends)
-      GROUP BY u.id, u.name, u.username, u.image
+      GROUP BY u.id, u.name, u.username, u.image, u.is_ultra
       ORDER BY weekly_xp DESC, u.id ASC
     `);
     // Drizzle's execute() returns shape per driver: { rows: [...] } on pg, Array on PGlite.

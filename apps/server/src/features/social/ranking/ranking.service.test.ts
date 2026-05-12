@@ -10,7 +10,7 @@ function makeRepo(rows: RawRankingRow[]): RankingRepository {
 }
 
 /** Build a sorted list of N rows: the row at index `meIndex` has userId "me". */
-function buildRows(count: number, meIndex: number): RawRankingRow[] {
+function buildRows(count: number, meIndex: number, ultraIndices: number[] = []): RawRankingRow[] {
   return Array.from({ length: count }, (_, i) => ({
     user_id: i === meIndex ? "me" : `user-${i}`,
     name: i === meIndex ? "Me" : `User ${i}`,
@@ -18,6 +18,7 @@ function buildRows(count: number, meIndex: number): RawRankingRow[] {
     image: null,
     // XP decreasing so index order = rank order
     weekly_xp: (count - i) * 10,
+    is_ultra: ultraIndices.includes(i),
   }));
 }
 
@@ -124,6 +125,65 @@ describe("RankingService", () => {
       const meEntries = result.entries.filter((e) => e.isMe);
       expect(meEntries).toHaveLength(1);
       expect(meEntries[0]?.userId).toBe("me");
+    });
+  });
+
+  describe("isUltra flag", () => {
+    it("passes isUltra=false for all entries when no Ultra users", async () => {
+      const rows = buildRows(4, 1); // no ultraIndices → all false
+      const service = new RankingService(makeRepo(rows));
+
+      const result = await service.getRanking("me", NOW);
+
+      expect(result.entries.every((e) => e.isUltra === false)).toBe(true);
+    });
+
+    it("passes isUltra=true for all entries when all are Ultra", async () => {
+      const rows = buildRows(4, 1, [0, 1, 2, 3]);
+      const service = new RankingService(makeRepo(rows));
+
+      const result = await service.getRanking("me", NOW);
+
+      expect(result.entries.every((e) => e.isUltra === true)).toBe(true);
+    });
+
+    it("passes isUltra per-entry correctly when some are Ultra and some are not", async () => {
+      // 5 entries; indices 0, 2 are Ultra; indices 1, 3, 4 are not
+      const rows = buildRows(5, 4, [0, 2]);
+      const service = new RankingService(makeRepo(rows));
+
+      const result = await service.getRanking("me", NOW);
+
+      expect(result.entries).toHaveLength(5);
+
+      // index 0 → ultra
+      expect(result.entries[0]?.isUltra).toBe(true);
+      // index 1 → not ultra
+      expect(result.entries[1]?.isUltra).toBe(false);
+      // index 2 → ultra
+      expect(result.entries[2]?.isUltra).toBe(true);
+      // index 3 → not ultra
+      expect(result.entries[3]?.isUltra).toBe(false);
+      // index 4 (me) → not ultra
+      expect(result.entries[4]?.isUltra).toBe(false);
+    });
+
+    it("isUltra flag is preserved after trim window is applied", async () => {
+      // 13 entries; me at index 6, only index 3 is Ultra
+      const rows = buildRows(13, 6, [3]);
+      const service = new RankingService(makeRepo(rows));
+
+      const result = await service.getRanking("me", NOW);
+
+      // trim window: start = max(0, min(3,1)) = 1, slice [1,11)
+      // index 3 in original = index 2 in the window (1-based offset of 1)
+      expect(result.entries).toHaveLength(10);
+
+      // Find the ultra entry in results
+      const ultraEntries = result.entries.filter((e) => e.isUltra);
+      expect(ultraEntries).toHaveLength(1);
+      // The ultra user is user-3 (index 3 in original rows)
+      expect(ultraEntries[0]?.userId).toBe("user-3");
     });
   });
 });

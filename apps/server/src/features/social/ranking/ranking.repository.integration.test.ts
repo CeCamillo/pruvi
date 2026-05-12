@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
 import {
   setupTestDb,
   cleanupTestDb,
@@ -29,13 +30,14 @@ describe("RankingRepository (integration)", () => {
     await teardownTestDb();
   });
 
-  async function insertUser(id: string, opts?: { username?: string }) {
+  async function insertUser(id: string, opts?: { username?: string; isUltra?: boolean }) {
     await db.insert(user).values({
       id,
       name: `User ${id}`,
       email: `${id}@example.com`,
       emailVerified: false,
       username: opts?.username ?? null,
+      isUltra: opts?.isUltra ?? false,
       updatedAt: new Date(),
     });
   }
@@ -193,6 +195,38 @@ describe("RankingRepository (integration)", () => {
       expect(rows).toHaveLength(1);
       expect(rows[0]!.user_id).toBe("solo-me");
       expect(rows[0]!.weekly_xp).toBe(25);
+    });
+
+    it("returns is_ultra per-row reflecting the user column value", async () => {
+      const weekStart = new Date("2026-05-11T03:00:00.000Z");
+      const futureDate = new Date("2099-01-01T00:00:00.000Z");
+
+      // me: not Ultra; friend-ultra: Ultra with expiry; friend-regular: not Ultra
+      await insertUser("me-ultra-test");
+      await insertUser("friend-ultra", { isUltra: true });
+      await insertUser("friend-regular");
+
+      // Set ultraExpiresAt on the ultra friend via update
+      await db
+        .update(user)
+        .set({ ultraExpiresAt: futureDate })
+        .where(eq(user.id, "friend-ultra"));
+
+      await makeFriendship("me-ultra-test", "friend-ultra");
+      await makeFriendship("me-ultra-test", "friend-regular");
+
+      const rows = await repo.getFriendsRanking("me-ultra-test", weekStart);
+
+      expect(rows).toHaveLength(3);
+
+      const meRow = rows.find((r) => r.user_id === "me-ultra-test")!;
+      expect(meRow.is_ultra).toBe(false);
+
+      const ultraRow = rows.find((r) => r.user_id === "friend-ultra")!;
+      expect(ultraRow.is_ultra).toBe(true);
+
+      const regularRow = rows.find((r) => r.user_id === "friend-regular")!;
+      expect(regularRow.is_ultra).toBe(false);
     });
   });
 });
