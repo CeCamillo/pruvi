@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ReviewsService } from "./reviews.service";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 
+// Flush the microtask + macrotask queues so fire-and-forget hooks resolve
+const flushAsync = () => new Promise<void>((r) => setTimeout(r, 0));
+
 const mockRepo = {
   findQuestionById: vi.fn(),
   findLatestReview: vi.fn(),
@@ -183,5 +186,116 @@ describe("ReviewsService.answerQuestion", () => {
     if (result.isOk()) {
       expect(result.value.answer.explanation).toBeNull();
     }
+  });
+});
+
+describe("completeAnswer — overtaken notification hook", () => {
+  const mockFriendshipsRepo = {
+    getWeeklyXp: vi.fn(),
+    findOvertakenFriendIds: vi.fn(),
+  };
+
+  const mockDispatcher = {
+    sendOvertakenNotification: vi.fn(),
+  };
+
+  let serviceWithHook: ReviewsService;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+
+    mockRepo.findQuestionById.mockResolvedValue(makeQuestion({ difficulty: "hard" }));
+    mockRepo.findLatestReview.mockResolvedValue(null);
+    mockRepo.insertReview.mockResolvedValue(undefined);
+    mockRepo.awardXp.mockResolvedValue(undefined);
+    mockRepo.findUserName = vi.fn().mockResolvedValue({ name: "Ana" });
+    mockLivesRepo.materializeRegen.mockResolvedValue({ lives: 5, lastRegenAt: null });
+    mockLivesRepo.tryDecrement.mockResolvedValue({ ok: true, livesAfter: 4, lastRegenAt: null });
+
+    mockFriendshipsRepo.getWeeklyXp.mockResolvedValue(50);
+    mockFriendshipsRepo.findOvertakenFriendIds.mockResolvedValue([
+      { friendId: "f1", weeklyXp: 25 },
+      { friendId: "f2", weeklyXp: 40 },
+    ]);
+    mockDispatcher.sendOvertakenNotification.mockResolvedValue(undefined);
+
+    serviceWithHook = new ReviewsService(
+      mockRepo as any,
+      mockLivesRepo as any,
+      mockDispatcher as any,
+      mockFriendshipsRepo as any,
+    );
+  });
+
+  it("invokes dispatcher.sendOvertakenNotification for each overtaken friend on xpAwarded > 0", async () => {
+    // correct answer → xpAwarded > 0 (hard = 35 XP)
+    const result = await serviceWithHook.answerQuestion(USER_ID, QUESTION_ID, 2);
+
+    expect(result.isOk()).toBe(true);
+
+    // Flush the fire-and-forget promise
+    await flushAsync();
+
+    expect(mockFriendshipsRepo.getWeeklyXp).toHaveBeenCalledOnce();
+    expect(mockFriendshipsRepo.findOvertakenFriendIds).toHaveBeenCalledOnce();
+    expect(mockDispatcher.sendOvertakenNotification).toHaveBeenCalledWith("f1", "Ana");
+    expect(mockDispatcher.sendOvertakenNotification).toHaveBeenCalledWith("f2", "Ana");
+    expect(mockDispatcher.sendOvertakenNotification).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to 'Alguém' when findUserName returns null", async () => {
+    (mockRepo as any).findUserName.mockResolvedValue(null);
+
+    await serviceWithHook.answerQuestion(USER_ID, QUESTION_ID, 2);
+    await flushAsync();
+
+    expect(mockDispatcher.sendOvertakenNotification).toHaveBeenCalledWith("f1", "Alguém");
+  });
+
+  it("does not invoke dispatcher when xpAwarded === 0 (wrong answer)", async () => {
+    // wrong answer → xpAwarded = 0
+    const result = await serviceWithHook.answerQuestion(USER_ID, QUESTION_ID, 0);
+
+    expect(result.isOk()).toBe(true);
+    await flushAsync();
+
+    expect(mockFriendshipsRepo.getWeeklyXp).not.toHaveBeenCalled();
+    expect(mockDispatcher.sendOvertakenNotification).not.toHaveBeenCalled();
+  });
+
+  it("does not invoke dispatcher when no friends are overtaken", async () => {
+    mockFriendshipsRepo.findOvertakenFriendIds.mockResolvedValue([]);
+
+    const result = await serviceWithHook.answerQuestion(USER_ID, QUESTION_ID, 2);
+    expect(result.isOk()).toBe(true);
+    await flushAsync();
+
+    expect(mockDispatcher.sendOvertakenNotification).not.toHaveBeenCalled();
+  });
+
+  it("does not throw if dispatcher.sendOvertakenNotification rejects (fire-and-forget swallows error)", async () => {
+    mockDispatcher.sendOvertakenNotification.mockRejectedValue(new Error("network error"));
+
+    const result = await serviceWithHook.answerQuestion(USER_ID, QUESTION_ID, 2);
+
+    // The HTTP response must still succeed
+    expect(result.isOk()).toBe(true);
+
+    // Let the rejected promise settle — should not throw
+    await flushAsync();
+  });
+
+  it("does not call hook when dispatcher is not provided", async () => {
+    const serviceNoDispatcher = new ReviewsService(
+      mockRepo as any,
+      mockLivesRepo as any,
+      undefined,
+      mockFriendshipsRepo as any,
+    );
+
+    await serviceNoDispatcher.answerQuestion(USER_ID, QUESTION_ID, 2);
+    await flushAsync();
+
+    expect(mockFriendshipsRepo.getWeeklyXp).not.toHaveBeenCalled();
   });
 });

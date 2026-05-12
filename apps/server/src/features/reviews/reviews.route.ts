@@ -4,12 +4,14 @@ import { AnswerQuestionBodySchema } from "@pruvi/shared";
 import { ReviewsService } from "./reviews.service";
 import { ReviewsRepository } from "./reviews.repository";
 import { LivesRepository } from "../lives/lives.repository";
+import { FriendshipsRepository } from "../social/friendships/friendships.repository";
 import { db } from "@pruvi/db";
 import { unwrapResult, successResponse } from "../../types";
 
 const repo = new ReviewsRepository(db);
 const livesRepo = new LivesRepository(db);
-const service = new ReviewsService(repo, livesRepo);
+const friendshipsRepo = new FriendshipsRepository(db);
+const service = new ReviewsService(repo, livesRepo, undefined, friendshipsRepo);
 
 export const reviewsRoutes: FastifyPluginAsyncZod = async (fastify) => {
   // POST /questions/:questionId/answer

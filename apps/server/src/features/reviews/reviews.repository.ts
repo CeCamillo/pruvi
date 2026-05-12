@@ -75,4 +75,14 @@ export class ReviewsRepository {
       .where(eq(user.id, userId));
   }
 
+  /** Look up a user's display name */
+  async findUserName(userId: string): Promise<{ name: string } | null> {
+    const rows = await this.db
+      .select({ name: user.name })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
 }
