@@ -355,6 +355,56 @@ export class BillingService {
     });
   }
 
+  /** Hourly reconciliation. Flips stale linked subscriptions to `expired` and runs the revoke pipeline.
+   *  See spec docs/superpowers/specs/2026-05-12-phase-2e7-billing-reconciliation-sweep-design.md. */
+  async runReconciliationSweep(opts: { now: Date; graceMs?: number }): Promise<{ scanned: number; expired: number; revoked: number }> {
+    const graceMs = opts.graceMs ?? 24 * 60 * 60 * 1000;
+    const cutoff = new Date(opts.now.getTime() - graceMs);
+    const candidates = await this.repo.findExpiredCandidates(this.db, cutoff);
+
+    let expired = 0;
+    let revoked = 0;
+
+    for (const candidate of candidates) {
+      const effect = await this.db.transaction(async (tx): Promise<PostCommitUltraEffect> => {
+        const updated = await this.repo.expireSubscriptionIfStale(tx, candidate.id, cutoff);
+        if (!updated) return { kind: "none" };
+
+        const audit = await this.repo.insertEvent(tx, {
+          provider: updated.provider,
+          messageId: `sweep:${updated.id}:${cutoff.toISOString()}`,
+          eventType: "SWEEP_EXPIRED",
+          purchaseToken: updated.purchaseToken,
+          payload: {
+            kind: "sweep",
+            subId: updated.id,
+            previousStatus: candidate.status,
+            currentPeriodEnd: updated.currentPeriodEnd?.toISOString() ?? null,
+            ranAt: opts.now.toISOString(),
+          },
+        });
+        if (!audit) return { kind: "none" };
+        await this.repo.markEventProcessed(tx, audit.id);
+
+        if (updated.userId === null) return { kind: "none" };
+        return { kind: "revoke_if_no_other_active", userId: updated.userId, excludeSubscriptionId: updated.id };
+      });
+
+      if (effect.kind !== "none") expired += 1;
+
+      // Two-phase commit: apply ultra effect AFTER the transaction commits, with bare this.db.
+      if (effect.kind === "revoke_if_no_other_active") {
+        const hasOther = await this.repo.hasOtherActiveSubscription(this.db, effect.userId, effect.excludeSubscriptionId);
+        if (!hasOther) {
+          await this.ultra.revoke(effect.userId);
+          revoked += 1;
+        }
+      }
+    }
+
+    return { scanned: candidates.length, expired, revoked };
+  }
+
   private async applyUltraEffect(effect: PostCommitUltraEffect): Promise<void> {
     if (effect.kind === "grant") {
       // Multi-sub GRANT guard (spec §7.2): the final expiry must be the MAX across this

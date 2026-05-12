@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import type { db as DbClient } from "@pruvi/db";
 import { subscription, billingEvent } from "@pruvi/db/schema/billing";
 import type { BillingProvider, SubscriptionStatus } from "@pruvi/shared";
@@ -210,6 +210,41 @@ export class BillingRepository {
       if (r.end && (!max || r.end > max)) max = r.end;
     }
     return max;
+  }
+
+  async findExpiredCandidates(d: DbOrTx, cutoff: Date): Promise<SubscriptionRow[]> {
+    const rows = await d
+      .select()
+      .from(subscription)
+      .where(
+        and(
+          isNotNull(subscription.userId),
+          inArray(subscription.status, ["active", "in_grace", "canceled"] as SubscriptionStatus[]),
+          isNotNull(subscription.currentPeriodEnd),
+          lt(subscription.currentPeriodEnd, cutoff),
+        ),
+      )
+      .orderBy(asc(subscription.currentPeriodEnd))
+      .limit(500);
+    return rows.map((r) => this.toSubscription(r));
+  }
+
+  async expireSubscriptionIfStale(d: DbOrTx, id: number, cutoff: Date): Promise<SubscriptionRow | null> {
+    const now = new Date();
+    const rows = await d
+      .update(subscription)
+      .set({ status: "expired", updatedAt: now })
+      .where(
+        and(
+          eq(subscription.id, id),
+          inArray(subscription.status, ["active", "in_grace", "canceled"] as SubscriptionStatus[]),
+          isNotNull(subscription.currentPeriodEnd),
+          lt(subscription.currentPeriodEnd, cutoff),
+        ),
+      )
+      .returning();
+    const row = rows[0];
+    return row ? this.toSubscription(row) : null;
   }
 
   private toSubscription(r: typeof subscription.$inferSelect): SubscriptionRow {

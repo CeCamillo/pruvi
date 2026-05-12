@@ -3,6 +3,7 @@ import { setupTestDb, cleanupTestDb, teardownTestDb, getTestDb } from "../../tes
 import { user } from "@pruvi/db/schema/auth";
 import { eq } from "drizzle-orm";
 import { BillingRepository } from "./billing.repository";
+import { subscription } from "@pruvi/db/schema/billing";
 
 describe("BillingRepository (integration)", () => {
   const db = getTestDb();
@@ -134,5 +135,128 @@ describe("BillingRepository (integration)", () => {
     expect(a.id).not.toBe(b.id);
     expect(a.provider).toBe("google_play");
     expect(b.provider).toBe("app_store");
+  });
+
+  describe("reconciliation sweep", () => {
+    const GRACE_MS = 24 * 60 * 60 * 1000;
+
+    it("findExpiredCandidates returns linked stale active rows", async () => {
+      await insertUser("u-sweep-1");
+      const now = new Date("2026-05-12T12:00:00Z");
+      const cutoff = new Date(now.getTime() - GRACE_MS);
+      const stalePast = new Date(cutoff.getTime() - 60_000);    // 1 min past cutoff
+      await db.insert(subscription).values({
+        userId: "u-sweep-1",
+        provider: "google_play",
+        productId: "ultra_monthly",
+        purchaseToken: "tok_stale",
+        status: "active",
+        currentPeriodEnd: stalePast,
+        linkedAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+      });
+
+      const rows = await repo.findExpiredCandidates(db, cutoff);
+      expect(rows.map((r) => r.purchaseToken)).toEqual(["tok_stale"]);
+    });
+
+    it("findExpiredCandidates excludes orphans (userId IS NULL)", async () => {
+      const now = new Date("2026-05-12T12:00:00Z");
+      const cutoff = new Date(now.getTime() - GRACE_MS);
+      await db.insert(subscription).values({
+        userId: null,
+        provider: "google_play",
+        productId: "",
+        purchaseToken: "tok_orphan",
+        status: "pending",
+        currentPeriodEnd: new Date(cutoff.getTime() - 60_000),
+      });
+      const rows = await repo.findExpiredCandidates(db, cutoff);
+      expect(rows).toEqual([]);
+    });
+
+    it("findExpiredCandidates excludes status='expired' and status='revoked'", async () => {
+      const userId = "u-sweep-1"; await insertUser(userId);
+      const now = new Date("2026-05-12T12:00:00Z");
+      const cutoff = new Date(now.getTime() - GRACE_MS);
+      const past = new Date(cutoff.getTime() - 60_000);
+      await db.insert(subscription).values([
+        { userId, provider: "google_play", productId: "p", purchaseToken: "tok_expired", status: "expired", currentPeriodEnd: past },
+        { userId, provider: "app_store", productId: "p", purchaseToken: "tok_revoked", status: "revoked", currentPeriodEnd: past },
+      ]);
+      const rows = await repo.findExpiredCandidates(db, cutoff);
+      expect(rows).toEqual([]);
+    });
+
+    it("findExpiredCandidates excludes rows with currentPeriodEnd IS NULL (incl canceled)", async () => {
+      const userId = "u-sweep-2"; await insertUser(userId);
+      const cutoff = new Date("2026-05-11T12:00:00Z");
+      await db.insert(subscription).values([
+        { userId, provider: "google_play", productId: "p", purchaseToken: "tok_canc_null", status: "canceled", currentPeriodEnd: null },
+        { userId, provider: "app_store", productId: "p", purchaseToken: "tok_active_null", status: "active", currentPeriodEnd: null },
+      ]);
+      const rows = await repo.findExpiredCandidates(db, cutoff);
+      expect(rows).toEqual([]);
+    });
+
+    it("findExpiredCandidates excludes rows within the cutoff window", async () => {
+      const userId = "u-sweep-3"; await insertUser(userId);
+      const cutoff = new Date("2026-05-11T12:00:00Z");
+      const justFresh = new Date(cutoff.getTime() + 1000);   // 1s after cutoff
+      await db.insert(subscription).values({
+        userId, provider: "google_play", productId: "p", purchaseToken: "tok_fresh",
+        status: "active", currentPeriodEnd: justFresh,
+      });
+      const rows = await repo.findExpiredCandidates(db, cutoff);
+      expect(rows).toEqual([]);
+    });
+
+    it("findExpiredCandidates includes canceled and in_grace when stale", async () => {
+      const userId = "u-sweep-4"; await insertUser(userId);
+      const cutoff = new Date("2026-05-11T12:00:00Z");
+      const past = new Date(cutoff.getTime() - 60_000);
+      await db.insert(subscription).values([
+        { userId, provider: "google_play", productId: "p", purchaseToken: "tok_canc", status: "canceled", currentPeriodEnd: past },
+        { userId, provider: "app_store", productId: "p", purchaseToken: "tok_grace", status: "in_grace", currentPeriodEnd: past },
+      ]);
+      const rows = await repo.findExpiredCandidates(db, cutoff);
+      expect(rows.map((r) => r.purchaseToken).sort()).toEqual(["tok_canc", "tok_grace"]);
+    });
+
+    it("expireSubscriptionIfStale flips status to expired and returns the row when predicate matches", async () => {
+      const userId = "u-sweep-5"; await insertUser(userId);
+      const cutoff = new Date("2026-05-11T12:00:00Z");
+      const past = new Date(cutoff.getTime() - 60_000);
+      const [row] = await db.insert(subscription).values({
+        userId, provider: "google_play", productId: "p", purchaseToken: "tok_stale2",
+        status: "active", currentPeriodEnd: past,
+      }).returning();
+      const updated = await repo.expireSubscriptionIfStale(db, row!.id, cutoff);
+      expect(updated?.status).toBe("expired");
+      expect(updated?.id).toBe(row!.id);
+    });
+
+    it("expireSubscriptionIfStale returns null when status no longer in set (concurrent webhook won)", async () => {
+      const userId = "u-sweep-6"; await insertUser(userId);
+      const cutoff = new Date("2026-05-11T12:00:00Z");
+      const past = new Date(cutoff.getTime() - 60_000);
+      const [row] = await db.insert(subscription).values({
+        userId, provider: "google_play", productId: "p", purchaseToken: "tok_already_expired",
+        status: "expired", currentPeriodEnd: past,
+      }).returning();
+      const updated = await repo.expireSubscriptionIfStale(db, row!.id, cutoff);
+      expect(updated).toBeNull();
+    });
+
+    it("expireSubscriptionIfStale returns null when currentPeriodEnd no longer stale (concurrent RENEWED won)", async () => {
+      const userId = "u-sweep-7"; await insertUser(userId);
+      const cutoff = new Date("2026-05-11T12:00:00Z");
+      const fresh = new Date(cutoff.getTime() + 60_000);
+      const [row] = await db.insert(subscription).values({
+        userId, provider: "google_play", productId: "p", purchaseToken: "tok_renewed",
+        status: "active", currentPeriodEnd: fresh,
+      }).returning();
+      const updated = await repo.expireSubscriptionIfStale(db, row!.id, cutoff);
+      expect(updated).toBeNull();
+    });
   });
 });
