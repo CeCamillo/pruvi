@@ -16,3 +16,5 @@ export * from "./social";
 export * from "./weekly";
 export * from "./ultra";
 export * from "./shields";
+export * from "./time";
+export * from "./simulado";
