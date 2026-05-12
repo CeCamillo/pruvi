@@ -28,7 +28,7 @@ Create `packages/shared/src/time.ts`:
 export const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
 ```
 
-- [ ] **Step 1.2: Make `weekly.ts` import the shared constant**
+- [ ] **Step 1.2: Make `weekly.ts` AND `shields.ts` import the shared constant**
 
 Replace the top of `packages/shared/src/weekly.ts`:
 
@@ -45,6 +45,8 @@ export function startOfWeekBrt(now: Date): Date {
   return new Date(brt.getTime() + BRT_OFFSET_MS);
 }
 ```
+
+In `packages/shared/src/shields.ts`, change the `todayInBrt` helper to import `BRT_OFFSET_MS` from `./time` instead of inlining `3 * 60 * 60 * 1000`. Add `import { BRT_OFFSET_MS } from "./time";` at the top and replace the inline constant inside the function. No behavior change; this consolidates the BRT offset to a single source of truth (Gate B suggestion N2).
 
 - [ ] **Step 1.3: Create `simulado.ts` with constants, helper, and Zod schemas**
 
@@ -337,11 +339,28 @@ Verify the generated SQL contains:
 
 If the generator names the new file `0009_<word>.sql`, that's fine; note the filename. If the generator pulled in unrelated diffs (e.g., stale snapshot), STOP and ask — do not commit unrelated migration changes.
 
-- [ ] **Step 2.4: Commit**
+- [ ] **Step 2.4: Update `cleanupTestDb` TRUNCATE list**
+
+Modify `apps/server/src/test/db-helpers.ts` — the `cleanupTestDb` function. The current TRUNCATE list does NOT include the two new tables. Because `weekly_simulado_question.question_id` references `question(id) ON DELETE RESTRICT`, the existing `TRUNCATE ... question ... CASCADE` will FAIL when leftover `weekly_simulado_question` rows exist from a previous test (RESTRICT blocks the cascade). Even if it didn't, leftover rows would leak between test cases.
+
+Replace the SQL inside `cleanupTestDb` with:
+
+```ts
+await db.execute(sql`
+  TRUNCATE TABLE weekly_simulado_question, weekly_simulado,
+    push_token, review_log, daily_session, streak_shield_usage,
+    question, subtopic, topic, subject,
+    account, session, verification, "user" CASCADE
+`);
+```
+
+Order matters: child tables before parents. `streak_shield_usage` was likely added previously but missing — include it for safety; if it's already cascade-handled via `user`, this is a no-op redundancy.
+
+- [ ] **Step 2.5: Commit**
 
 ```bash
-git add packages/db/src/schema/weekly-simulado.ts packages/db/src/schema/index.ts packages/db/src/migrations/
-git commit -m "feat(db): weekly_simulado + weekly_simulado_question tables"
+git add packages/db/src/schema/weekly-simulado.ts packages/db/src/schema/index.ts packages/db/src/migrations/ apps/server/src/test/db-helpers.ts
+git commit -m "feat(db): weekly_simulado + weekly_simulado_question tables and test cleanup"
 ```
 
 ---
@@ -357,7 +376,7 @@ git commit -m "feat(db): weekly_simulado + weekly_simulado_question tables"
 Create `apps/server/src/features/simulados/simulados.repository.ts`:
 
 ```ts
-import { and, asc, count, desc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { db as DbClient } from "@pruvi/db";
 import { user } from "@pruvi/db/schema/auth";
 import { question } from "@pruvi/db/schema/questions";
@@ -403,6 +422,8 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { setupTestDb, cleanupTestDb, teardownTestDb, getTestDb } from "../../test/db-helpers";
 import { user } from "@pruvi/db/schema/auth";
 import { question } from "@pruvi/db/schema/questions";
+import { subject } from "@pruvi/db/schema/subjects";
+import { topic, subtopic } from "@pruvi/db/schema/topics";
 import { SimuladosRepository } from "./simulados.repository";
 
 describe("SimuladosRepository (integration)", () => {
@@ -425,18 +446,38 @@ describe("SimuladosRepository (integration)", () => {
     });
   }
 
-  async function seedQuestions(n: number, subjectId = 1) {
-    for (let i = 1; i <= n; i++) {
+  /** Sets up subject/topic/subtopic FK prereqs and inserts `n` questions distributed
+   *  across the requested number of subjects. Returns the created subject IDs. */
+  async function seedQuestions(n: number, subjectCount = 1): Promise<number[]> {
+    const subjects = await db
+      .insert(subject)
+      .values(Array.from({ length: subjectCount }, (_, i) => ({ name: `S${i + 1}`, slug: `s${i + 1}` })))
+      .returning();
+    const subtopicsBySubject = new Map<number, number>();
+    for (const s of subjects) {
+      const [t] = await db
+        .insert(topic)
+        .values({ subjectId: s.id, name: `T-${s.id}`, slug: `t-${s.id}`, displayOrder: 0 })
+        .returning();
+      const [st] = await db
+        .insert(subtopic)
+        .values({ topicId: t!.id, name: `ST-${s.id}`, slug: `st-${s.id}`, displayOrder: 0 })
+        .returning();
+      subtopicsBySubject.set(s.id, st!.id);
+    }
+    for (let i = 0; i < n; i++) {
+      const subj = subjects[i % subjects.length]!;
       await db.insert(question).values({
-        subjectId,
-        subtopicId: 1,
-        content: `Q${i}`,
+        subjectId: subj.id,
+        subtopicId: subtopicsBySubject.get(subj.id)!,
+        content: `Q${i + 1}`,
         options: ["a", "b", "c", "d"],
         correctOptionIndex: i % 4,
-        difficulty: 1,
+        difficulty: "easy" as const,
         requiresCalculation: false,
       });
     }
+    return subjects.map((s) => s.id);
   }
 
   describe("selectQuestionsForSimulado", () => {
@@ -592,7 +633,9 @@ Append:
         return { simulado: this.toSimuladoRow(simulado), questions, created: true };
       }
 
-      // Conflict path — re-read existing row + question set.
+      // Conflict path — re-read existing row + question set (inline; uses tx not this.db so
+      // it sees any uncommitted state in this transaction, though in practice the conflict
+      // means another committed transaction wrote it).
       const existing = await tx
         .select()
         .from(weeklySimulado)
@@ -600,7 +643,37 @@ Append:
         .limit(1);
       const simulado = existing[0];
       if (!simulado) throw new Error("startOrGetSimulado: conflict but no existing row");
-      const existingQs = await this.fetchQuestionsForSimulado(tx, simulado.id);
+      const rows = await tx
+        .select({
+          position: weeklySimuladoQuestion.position,
+          questionId: weeklySimuladoQuestion.questionId,
+          selectedOptionIndex: weeklySimuladoQuestion.selectedOptionIndex,
+          isCorrect: weeklySimuladoQuestion.isCorrect,
+          content: question.content,
+          options: question.options,
+          correctOptionIndex: question.correctOptionIndex,
+          explanation: question.explanation,
+          subjectId: question.subjectId,
+          subtopicId: question.subtopicId,
+          requiresCalculation: question.requiresCalculation,
+        })
+        .from(weeklySimuladoQuestion)
+        .innerJoin(question, eq(weeklySimuladoQuestion.questionId, question.id))
+        .where(eq(weeklySimuladoQuestion.simuladoId, simulado.id))
+        .orderBy(asc(weeklySimuladoQuestion.position));
+      const existingQs: SimuladoQuestionRow[] = rows.map((r) => ({
+        position: r.position,
+        questionId: r.questionId,
+        content: r.content,
+        options: r.options as string[],
+        correctOptionIndex: r.correctOptionIndex,
+        explanation: r.explanation,
+        subjectId: r.subjectId,
+        subtopicId: r.subtopicId,
+        requiresCalculation: r.requiresCalculation,
+        selectedOptionIndex: r.selectedOptionIndex,
+        isCorrect: r.isCorrect,
+      }));
       return { simulado: this.toSimuladoRow(simulado), questions: existingQs, created: false };
     });
   }
@@ -617,8 +690,8 @@ Append:
     };
   }
 
-  private async fetchQuestionsForSimulado(tx: Db | Parameters<Db["transaction"]>[0] extends (tx: infer T) => unknown ? T : never, simuladoId: number): Promise<SimuladoQuestionRow[]> {
-    const rows = await (tx as Db)
+  private async fetchQuestionsForSimulado(simuladoId: number): Promise<SimuladoQuestionRow[]> {
+    const rows = await this.db
       .select({
         position: weeklySimuladoQuestion.position,
         questionId: weeklySimuladoQuestion.questionId,
@@ -816,14 +889,22 @@ Inside the class, add:
    */
   async recordAnswer(simuladoId: number, userId: string, questionId: number, selectedOptionIndex: number): Promise<RecordAnswerResult> {
     return await this.db.transaction(async (tx) => {
-      // 1. Lock parent row; check ownership and completion.
-      const locked = await tx.execute(sql`
-        SELECT id, user_id, completed_at, correct_count, questions_count
-        FROM weekly_simulado WHERE id = ${simuladoId} FOR UPDATE
-      `);
-      const parent = (locked.rows ?? locked)[0] as { id: number; user_id: string; completed_at: Date | null; correct_count: number; questions_count: number } | undefined;
-      if (!parent || parent.user_id !== userId) return { kind: "not_found" };
-      if (parent.completed_at !== null) return { kind: "already_completed" };
+      // 1. Lock parent row using Drizzle's typed .for("update"). Check ownership and completion.
+      const lockedRows = await tx
+        .select({
+          id: weeklySimulado.id,
+          userId: weeklySimulado.userId,
+          completedAt: weeklySimulado.completedAt,
+          correctCount: weeklySimulado.correctCount,
+          questionsCount: weeklySimulado.questionsCount,
+        })
+        .from(weeklySimulado)
+        .where(eq(weeklySimulado.id, simuladoId))
+        .for("update")
+        .limit(1);
+      const parent = lockedRows[0];
+      if (!parent || parent.userId !== userId) return { kind: "not_found" };
+      if (parent.completedAt !== null) return { kind: "already_completed" };
 
       // 2. Look up the question within this simulado.
       const qRow = await tx
@@ -894,7 +975,7 @@ Inside the class, add:
           .where(and(eq(weeklySimulado.id, simuladoId), isNull(weeklySimulado.completedAt)));
         completed = true;
       }
-      const answeredCount = parent.questions_count - remaining;
+      const answeredCount = parent.questionsCount - remaining;
       return { kind: "recorded", isCorrect, correctOptionIndex: correctOpt, explanation, answeredCount, completed };
     });
   }
@@ -918,24 +999,10 @@ Inside the class, add:
       .limit(1);
     const row = rows[0];
     if (!row) return null;
-    const questions = await this.fetchQuestionsForSimulado(this.db, row.id);
+    const questions = await this.fetchQuestionsForSimulado(row.id);
     return { simulado: this.toSimuladoRow(row), questions };
   }
 ```
-
-**Note on `tx.execute(sql\`... FOR UPDATE\`)`:** drizzle-orm's `.for("update")` is supported on `.select()`; prefer:
-
-```ts
-const lockedRows = await tx
-  .select({ id: weeklySimulado.id, userId: weeklySimulado.userId, completedAt: weeklySimulado.completedAt, correctCount: weeklySimulado.correctCount, questionsCount: weeklySimulado.questionsCount })
-  .from(weeklySimulado)
-  .where(eq(weeklySimulado.id, simuladoId))
-  .for("update")
-  .limit(1);
-const parent = lockedRows[0];
-```
-
-Use the typed `.for("update")` form rather than raw `sql\`SELECT ... FOR UPDATE\``. Adjust the implementation accordingly (the field names map to `parent.userId`, `parent.completedAt`, `parent.questionsCount`).
 
 - [ ] **Step 4.3: Run tests, fix, commit**
 
@@ -965,18 +1032,8 @@ Append to the integration test file:
   describe("listPriorCompletedSimulados", () => {
     it("returns up to N most recent COMPLETED prior simulados, oldest first, with per-subject breakdown", async () => {
       await insertUser("u-hist-1");
-      // Seed enough questions across 2 subjects
-      for (let i = 1; i <= 20; i++) {
-        await db.insert(question).values({
-          subjectId: i <= 10 ? 1 : 2,
-          subtopicId: 1,
-          content: `Q${i}`,
-          options: ["a","b","c","d"],
-          correctOptionIndex: 0,
-          difficulty: 1,
-          requiresCalculation: false,
-        });
-      }
+      // Seed 20 questions across 2 subjects (FK prereqs handled inside seedQuestions)
+      await seedQuestions(20, 2);
       const weeks = ["2026-04-05", "2026-04-12", "2026-04-19", "2026-04-26", "2026-05-03", "2026-05-10"];
       for (const w of weeks) {
         const { simulado, questions } = await repo.startOrGetSimulado("u-hist-1", w, 10);
@@ -997,9 +1054,7 @@ Append to the integration test file:
 
     it("excludes IN-PROGRESS simulados", async () => {
       await insertUser("u-hist-2");
-      for (let i = 1; i <= 5; i++) {
-        await db.insert(question).values({ subjectId: 1, subtopicId: 1, content: `Q${i}`, options: ["a","b","c","d"], correctOptionIndex: 0, difficulty: 1, requiresCalculation: false });
-      }
+      await seedQuestions(5, 1);
       const { simulado: prior, questions: pq } = await repo.startOrGetSimulado("u-hist-2", "2026-05-03", 5);
       for (const q of pq) await repo.recordAnswer(prior.id, "u-hist-2", q.questionId, q.correctOptionIndex);
       // Current week — started but not completed
@@ -1011,9 +1066,7 @@ Append to the integration test file:
 
     it("getResultsAggregate returns per-subject breakdown for one simulado", async () => {
       await insertUser("u-agg-1");
-      for (let i = 1; i <= 6; i++) {
-        await db.insert(question).values({ subjectId: i <= 3 ? 1 : 2, subtopicId: 1, content: `Q${i}`, options: ["a","b","c","d"], correctOptionIndex: 0, difficulty: 1, requiresCalculation: false });
-      }
+      await seedQuestions(6, 2); // 3 questions for each of 2 subjects
       const { simulado, questions } = await repo.startOrGetSimulado("u-agg-1", "2026-05-10", 6);
       // Answer first 4 correctly, last 2 wrong
       for (let i = 0; i < 4; i++) await repo.recordAnswer(simulado.id, "u-agg-1", questions[i]!.questionId, questions[i]!.correctOptionIndex);
@@ -1062,7 +1115,7 @@ Append to `simulados.repository.ts`:
       })
       .from(weeklySimuladoQuestion)
       .innerJoin(question, eq(weeklySimuladoQuestion.questionId, question.id))
-      .where(sql`${weeklySimuladoQuestion.simuladoId} IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`)
+      .where(inArray(weeklySimuladoQuestion.simuladoId, ids))
       .groupBy(weeklySimuladoQuestion.simuladoId, question.subjectId);
 
     const bySimulado = new Map<number, Array<{ subjectId: number; correct: number; total: number }>>();
@@ -1139,7 +1192,83 @@ Required test cases (skeleton; fill in full code following the project's mocking
 - `forceComplete`: non-Ultra → 403; not_found → 404; otherwise ok.
 - `getResults`: non-Ultra → 403; not owned → 404; in-progress → 400 (results not available until completed); completed → returns aggregate + history.
 
-For Ultra-lapse-after-start (acceptance A9): the service should NOT block `recordAnswer` / `forceComplete` / `getDetail` / `getResults` when `isUltra` is currently false but the simulado exists and is owned. **This means**: in `recordAnswer`, `forceComplete`, `getDetail`, `getResults`, we do NOT call `ultra.isUltra` — we only check Ultra at `getCurrent` and `start`. Document this in a comment on the methods that intentionally skip the Ultra check.
+For Ultra-lapse-after-start (acceptance A9): the service must NOT block `recordAnswer` / `forceComplete` / `getDetail` / `getResults` when `isUltra` is currently false but the simulado exists and is owned. We do NOT call `ultra.isUltra` in those methods at all. `getCurrent` defers the Ultra check until AFTER it determines no simulado exists for the current week; if one exists, it returns 200 regardless of Ultra state. Only `/start` enforces a strict Ultra check.
+
+**Required A9 test (fully fleshed-out — must not be left as a skeleton):**
+
+```ts
+import { describe, it, expect, vi } from "vitest";
+import { SimuladosService } from "./simulados.service";
+import { ok } from "neverthrow";
+
+describe("SimuladosService — A9 Ultra-lapse exemption", () => {
+  function buildSut(opts: { isUltra: boolean; existingSimulado: unknown | null }) {
+    const ultra = { isUltra: vi.fn().mockResolvedValue(opts.isUltra) } as unknown as import("../ultra/ultra.service").UltraService;
+    const repo = {
+      findByUserAndWeek: vi.fn().mockResolvedValue(opts.existingSimulado),
+      listPriorCompletedSimulados: vi.fn().mockResolvedValue([]),
+      countAnswered: vi.fn().mockResolvedValue(0),
+      getOneForUser: vi.fn(),
+      recordAnswer: vi.fn(),
+      forceComplete: vi.fn(),
+      getResultsAggregate: vi.fn(),
+      startOrGetSimulado: vi.fn(),
+    } as unknown as import("./simulados.repository").SimuladosRepository;
+    return { service: new SimuladosService(repo, ultra), ultra, repo };
+  }
+
+  it("getCurrent: lapsed Ultra with existing in-progress simulado returns 200 (no 403)", async () => {
+    const existing = {
+      id: 42, userId: "u1", weekStartDate: "2026-05-10",
+      startedAt: new Date("2026-05-10T12:00:00Z"), completedAt: null,
+      questionsCount: 35, correctCount: 4,
+    };
+    const { service, ultra } = buildSut({ isUltra: false, existingSimulado: existing });
+    const r = await service.getCurrent("u1", new Date("2026-05-10T15:00:00Z"));
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) {
+      expect(r.value.status).toBe("in_progress");
+      expect(r.value.simulado?.id).toBe(42);
+    }
+    // Critical: the Ultra check must NOT have been called when an existing simulado was found.
+    expect(ultra.isUltra).not.toHaveBeenCalled();
+  });
+
+  it("getCurrent: lapsed Ultra with NO simulado for the current week returns 403", async () => {
+    const { service } = buildSut({ isUltra: false, existingSimulado: null });
+    const r = await service.getCurrent("u1", new Date("2026-05-10T15:00:00Z"));
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error.message).toContain("ULTRA_REQUIRED");
+  });
+
+  it("start: lapsed Ultra always returns 403, even if an old simulado exists", async () => {
+    const { service } = buildSut({ isUltra: false, existingSimulado: null });
+    const r = await service.start("u1", new Date("2026-05-10T15:00:00Z"));
+    expect(r.isErr()).toBe(true);
+  });
+
+  it("recordAnswer: lapsed Ultra with owned simulado succeeds (Ultra check skipped)", async () => {
+    const ultra = { isUltra: vi.fn().mockResolvedValue(false) } as unknown as import("../ultra/ultra.service").UltraService;
+    const repo = {
+      recordAnswer: vi.fn().mockResolvedValue({
+        kind: "recorded", isCorrect: true, correctOptionIndex: 0, explanation: null,
+        answeredCount: 1, completed: false,
+      }),
+    } as unknown as import("./simulados.repository").SimuladosRepository;
+    const service = new SimuladosService(repo, ultra);
+    const r = await service.recordAnswer(42, "u1", 100, 0);
+    expect(r.isOk()).toBe(true);
+    expect(ultra.isUltra).not.toHaveBeenCalled();
+  });
+});
+```
+
+The remaining service tests (entitlement gating on `/start`, error mapping for `recordAnswer` outcomes, etc.) can follow the same `buildSut` pattern. Cover at minimum:
+- `start`: non-Ultra → ForbiddenError; Ultra → repo.startOrGetSimulado called with `(userId, weekStart, SIMULADO_QUESTION_COUNT)` and response strips `correctOptionIndex` and `explanation` from each question.
+- `recordAnswer`: each repo result kind maps to the right Result<…, AppError>: not_found → NotFoundError, bad_question → ValidationError, already_completed → ConflictError, recorded → ok, already_answered → ok.
+- `getResults`: not_owned → NotFoundError; in_progress → ValidationError; completed → ok with aggregate + history.
+- `forceComplete`: not_found → NotFoundError; completed → ok.
+- `getDetail`: not_owned → NotFoundError; in-progress hides `correctOptionIndex`/`explanation` on unanswered questions but reveals them on answered questions; completed reveals all.
 
 - [ ] **Step 6.2: Implement the service**
 
@@ -1193,11 +1322,15 @@ export class SimuladosService {
   }
 
   async getCurrent(userId: string, now = new Date()): Promise<Result<SimuladoCurrentResponse, AppError>> {
-    if (!(await this.ultra.isUltra(userId))) return err(new ForbiddenError("ULTRA_REQUIRED"));
+    // Per spec §4 / A9: Ultra check is deferred. A user who started a simulado while Ultra
+    // was active retains read access even if Ultra has lapsed. We only enforce ULTRA_REQUIRED
+    // when there is NO simulado for the current week (i.e., they'd be requesting a `not_started`
+    // view that would normally lead to /start, which IS Ultra-gated).
     const { weekStart, weekEnd } = weekBoundsForSimulado(now);
     const existing = await this.repo.findByUserAndWeek(userId, weekStart);
     const history = await this.repo.listPriorCompletedSimulados(userId, weekStart, HISTORY_LIMIT);
     if (!existing) {
+      if (!(await this.ultra.isUltra(userId))) return err(new ForbiddenError("ULTRA_REQUIRED"));
       return ok({ weekStart, weekEnd, status: "not_started", simulado: null, history });
     }
     const status: SimuladoCurrentResponse["status"] = existing.completedAt ? "completed" : "in_progress";
@@ -1557,9 +1690,10 @@ EOF
 
 ---
 
-## Self-review checklist (run before dispatch)
+## Self-review checklist (post Gate B v2)
 
-1. **Spec coverage:** every acceptance A1–A13 maps to at least one task. ✅ (A1 → T3/T6; A2 → T3/T4; A3 → T6/T7; A4 → T4/T6; A5 → T4; A6 → T4; A7 → T5/T6; A8 → T6; A9 → T6; A10 → T2; A11 → T2; A12 → T7; A13 → T6/T7.)
+1. **Spec coverage:** every acceptance A1–A13 maps to at least one task. ✅ (A1 → T3/T6; A2 → T3/T4; A3 → T6/T7 (Ultra-lapse-aware); A4 → T4/T6; A5 → T4; A6 → T4; A7 → T5/T6; A8 → T6; A9 → T6 + dedicated test in 6.1; A10 → T2; A11 → T2; A12 → T7; A13 → T6/T7.)
 2. **Placeholder scan:** no TBDs, no "similar to Task N". ✅
 3. **Type consistency:** `SimuladoRow.weekStartDate` is `string` everywhere. `SimuladoQuestionRow` has `correctOptionIndex` always set (read from join). Service strips it before returning to client. ✅
 4. **Migration safety:** `0009_*` is generated by drizzle-kit; manual SQL edits not required. ✅
+5. **Gate B fixes applied:** cleanupTestDb truncate list updated for the two new tables (B1); typed `.for("update")` is the only `recordAnswer` lock form (B2); `difficulty` enum uses `"easy" as const` everywhere (B4); `getCurrent` defers Ultra check so Ultra-lapsed users with an in-progress simulado still see it (B6); FK prereqs (subject + topic + subtopic) seeded inside the `seedQuestions` helper before inserting questions; `shields.ts` migrated to shared `BRT_OFFSET_MS` (N2); `inArray` replaces `sql.join` (N3); `fetchQuestionsForSimulado` no longer threads `tx` (N1); fleshed-out A9 service test (N5). ✅
