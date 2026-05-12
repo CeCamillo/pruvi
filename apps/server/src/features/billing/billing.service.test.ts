@@ -52,7 +52,7 @@ describe("BillingService", () => {
   it("PURCHASED on linked subscription: active + grant called with ~now+30d", async () => {
     const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() };
     const { service, ultra, repo } = buildSut({ findSubscription: linked });
-    const r = await service.processWebhookEnvelope(buildEnvelope(4));
+    const r = await service.processGooglePlayEnvelope(buildEnvelope(4));
     expect(r.isOk()).toBe(true);
     expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "active" }));
     expect(ultra.grant).toHaveBeenCalledTimes(1);
@@ -64,7 +64,7 @@ describe("BillingService", () => {
   // Case 2
   it("PURCHASED with NO existing subscription: orphan created, NO grant", async () => {
     const { service, ultra, repo } = buildSut({ findSubscription: null });
-    await service.processWebhookEnvelope(buildEnvelope(4));
+    await service.processGooglePlayEnvelope(buildEnvelope(4));
     expect(repo.createOrphanSubscription).toHaveBeenCalled();
     expect(ultra.grant).not.toHaveBeenCalled();
   });
@@ -73,7 +73,7 @@ describe("BillingService", () => {
   it("EXPIRED with no other active subs: revoke called", async () => {
     const active: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
     const { service, ultra } = buildSut({ findSubscription: active, hasOtherActive: false });
-    await service.processWebhookEnvelope(buildEnvelope(13));
+    await service.processGooglePlayEnvelope(buildEnvelope(13));
     expect(ultra.revoke).toHaveBeenCalledWith("u1");
   });
 
@@ -81,7 +81,7 @@ describe("BillingService", () => {
   it("EXPIRED with another active subscription: revoke NOT called (multi-sub guard)", async () => {
     const active: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
     const { service, ultra, repo } = buildSut({ findSubscription: active, hasOtherActive: true });
-    await service.processWebhookEnvelope(buildEnvelope(13));
+    await service.processGooglePlayEnvelope(buildEnvelope(13));
     expect(repo.hasOtherActiveSubscription).toHaveBeenCalledWith(expect.anything(), "u1", 10);
     expect(ultra.revoke).not.toHaveBeenCalled();
   });
@@ -91,7 +91,7 @@ describe("BillingService", () => {
     const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() };
     const farFuture = new Date(Date.now() + 365 * 86400000); // 1 year out
     const { service, ultra } = buildSut({ findSubscription: linked, maxOtherEnd: farFuture });
-    await service.processWebhookEnvelope(buildEnvelope(4));
+    await service.processGooglePlayEnvelope(buildEnvelope(4));
     expect(ultra.grant).toHaveBeenCalledWith("u1", farFuture);
   });
 
@@ -99,7 +99,7 @@ describe("BillingService", () => {
   it("CANCELED: state=canceled, no Ultra change", async () => {
     const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "google_play", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
     const { service, ultra, repo } = buildSut({ findSubscription: linked });
-    await service.processWebhookEnvelope(buildEnvelope(3));
+    await service.processGooglePlayEnvelope(buildEnvelope(3));
     expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "canceled" }));
     expect(ultra.grant).not.toHaveBeenCalled();
     expect(ultra.revoke).not.toHaveBeenCalled();
@@ -108,14 +108,14 @@ describe("BillingService", () => {
   // Case 6
   it("Duplicate messageId: second call no-op (insertEvent returns null)", async () => {
     const { service, ultra } = buildSut({ insertEvent: null });
-    await service.processWebhookEnvelope(buildEnvelope(4));
+    await service.processGooglePlayEnvelope(buildEnvelope(4));
     expect(ultra.grant).not.toHaveBeenCalled();
   });
 
   // Case 7
   it("Unknown notificationType: UNKNOWN_99 event recorded, no state mutation", async () => {
     const { service, ultra, repo } = buildSut();
-    await service.processWebhookEnvelope(buildEnvelope(99));
+    await service.processGooglePlayEnvelope(buildEnvelope(99));
     expect(repo.insertEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "UNKNOWN_99" }));
     expect(repo.updateSubscriptionState).not.toHaveBeenCalled();
     expect(ultra.grant).not.toHaveBeenCalled();
@@ -166,5 +166,187 @@ describe("BillingService", () => {
     expect(repo.claimOrphanSubscription).toHaveBeenCalledWith(expect.anything(), 10, "u1", "p");
     expect(repo.markEventProcessed).toHaveBeenCalledWith(expect.anything(), 5);
     expect(ultra.grant).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// App Store builder helpers
+// ---------------------------------------------------------------------------
+
+function buildAppStoreEnvelope(
+  notificationType: string,
+  opts: {
+    subtype?: string;
+    expiresDate?: number;
+    originalTransactionId?: string;
+    notificationUUID?: string;
+  } = {},
+) {
+  const header = Buffer.from(JSON.stringify({ alg: "ES256" })).toString("base64url");
+  const tx = {
+    originalTransactionId: opts.originalTransactionId ?? "tok",
+    productId: "pruvi_ultra_monthly",
+    expiresDate: opts.expiresDate ?? Date.now() + 30 * 86400000,
+    environment: "Production",
+  };
+  const innerJws = `${header}.${Buffer.from(JSON.stringify(tx)).toString("base64url")}.sig`;
+  const outer: Record<string, unknown> = {
+    notificationUUID: opts.notificationUUID ?? "uuid-1",
+    notificationType,
+    version: "2.0",
+    signedDate: Date.now(),
+    data: { signedTransactionInfo: innerJws, environment: "Production" },
+  };
+  if (opts.subtype) outer.subtype = opts.subtype;
+  return { signedPayload: `${header}.${Buffer.from(JSON.stringify(outer)).toString("base64url")}.sig` };
+}
+
+describe("BillingService — App Store", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Case 1: SUBSCRIBED with linked sub → active, grant with expiresDate from Apple
+  it("SUBSCRIBED with linked sub: state=active, grant called with expiresDate from Apple", async () => {
+    const futureMs = Date.now() + 30 * 86400000;
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "app_store", productId: "pruvi_ultra_monthly", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked });
+    const r = await service.processAppStoreEnvelope(buildAppStoreEnvelope("SUBSCRIBED", { subtype: "INITIAL_BUY", expiresDate: futureMs }));
+    expect(r.isOk()).toBe(true);
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "active" }));
+    expect(ultra.grant).toHaveBeenCalledTimes(1);
+    const grantedExpiry = ultra.grant.mock.calls[0]![1] as Date;
+    expect(Math.abs(grantedExpiry.getTime() - futureMs)).toBeLessThan(1000);
+  });
+
+  // Case 2: DID_RENEW → active, grant with new expiresDate
+  it("DID_RENEW: state=active, grant called with new expiresDate", async () => {
+    const futureMs = Date.now() + 30 * 86400000;
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "app_store", productId: "pruvi_ultra_monthly", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked });
+    const r = await service.processAppStoreEnvelope(buildAppStoreEnvelope("DID_RENEW", { expiresDate: futureMs }));
+    expect(r.isOk()).toBe(true);
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "active" }));
+    expect(ultra.grant).toHaveBeenCalledTimes(1);
+    const grantedExpiry = ultra.grant.mock.calls[0]![1] as Date;
+    expect(Math.abs(grantedExpiry.getTime() - futureMs)).toBeLessThan(1000);
+  });
+
+  // Case 3: DID_FAIL_TO_RENEW (no subtype) → on_hold, no Ultra change
+  it("DID_FAIL_TO_RENEW (no subtype): state=on_hold, no Ultra change", async () => {
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "app_store", productId: "pruvi_ultra_monthly", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked });
+    await service.processAppStoreEnvelope(buildAppStoreEnvelope("DID_FAIL_TO_RENEW"));
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "on_hold" }));
+    expect(ultra.grant).not.toHaveBeenCalled();
+    expect(ultra.revoke).not.toHaveBeenCalled();
+  });
+
+  // Case 4: DID_FAIL_TO_RENEW:GRACE_PERIOD → in_grace, no Ultra change
+  it("DID_FAIL_TO_RENEW:GRACE_PERIOD: state=in_grace, no Ultra change", async () => {
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "app_store", productId: "pruvi_ultra_monthly", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked });
+    await service.processAppStoreEnvelope(buildAppStoreEnvelope("DID_FAIL_TO_RENEW", { subtype: "GRACE_PERIOD" }));
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "in_grace" }));
+    expect(ultra.grant).not.toHaveBeenCalled();
+    expect(ultra.revoke).not.toHaveBeenCalled();
+  });
+
+  // Case 5: EXPIRED with no other active → revoke called
+  it("EXPIRED with no other active subs: revoke called", async () => {
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "app_store", productId: "pruvi_ultra_monthly", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
+    const { service, ultra } = buildSut({ findSubscription: linked, hasOtherActive: false });
+    await service.processAppStoreEnvelope(buildAppStoreEnvelope("EXPIRED"));
+    expect(ultra.revoke).toHaveBeenCalledWith("u1");
+  });
+
+  // Case 6: EXPIRED with other active sub → revoke NOT called (multi-sub guard)
+  it("EXPIRED with another active subscription: revoke NOT called (multi-sub guard)", async () => {
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "app_store", productId: "pruvi_ultra_monthly", purchaseToken: "tok", status: "active", currentPeriodEnd: new Date(), linkedAt: new Date() };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked, hasOtherActive: true });
+    await service.processAppStoreEnvelope(buildAppStoreEnvelope("EXPIRED"));
+    expect(repo.hasOtherActiveSubscription).toHaveBeenCalledWith(expect.anything(), "u1", 10);
+    expect(ultra.revoke).not.toHaveBeenCalled();
+  });
+
+  // Case 7: REFUND_REVERSED with future expiry → active, grant
+  it("REFUND_REVERSED with future expiry: state=active, ultra.grant called", async () => {
+    const futureMs = Date.now() + 30 * 86400000;
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "app_store", productId: "pruvi_ultra_monthly", purchaseToken: "tok", status: "revoked", currentPeriodEnd: new Date(), linkedAt: new Date() };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked });
+    await service.processAppStoreEnvelope(buildAppStoreEnvelope("REFUND_REVERSED", { expiresDate: futureMs }));
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(expect.anything(), 10, expect.objectContaining({ status: "active" }));
+    expect(ultra.grant).toHaveBeenCalledTimes(1);
+  });
+
+  // Case 8: Duplicate notificationUUID → no state change, no Ultra call
+  it("Duplicate notificationUUID: second delivery is no-op (insertEvent returns null)", async () => {
+    const { service, ultra, repo } = buildSut();
+    // Override insertEvent to return null (simulates duplicate rejection by DB unique constraint).
+    (repo.insertEvent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    await service.processAppStoreEnvelope(buildAppStoreEnvelope("SUBSCRIBED", { notificationUUID: "uuid-dup" }));
+    expect(ultra.grant).not.toHaveBeenCalled();
+    expect(repo.updateSubscriptionState).not.toHaveBeenCalled();
+  });
+
+  // Case 9: TEST notification → audit insert with eventType="TEST", no other action
+  it("TEST notification: audit row inserted with eventType=TEST, no state mutation", async () => {
+    const { service, ultra, repo } = buildSut();
+    const testEnv = { signedPayload: (() => {
+      const header = Buffer.from(JSON.stringify({ alg: "ES256" })).toString("base64url");
+      const body = Buffer.from(JSON.stringify({ notificationUUID: "uuid-test", notificationType: "TEST", version: "2.0" })).toString("base64url");
+      return `${header}.${body}.sig`;
+    })() };
+    const r = await service.processAppStoreEnvelope(testEnv);
+    expect(r.isOk()).toBe(true);
+    expect(repo.insertEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "TEST", provider: "app_store" }));
+    expect(ultra.grant).not.toHaveBeenCalled();
+    expect(ultra.revoke).not.toHaveBeenCalled();
+    expect(repo.updateSubscriptionState).not.toHaveBeenCalled();
+  });
+
+  // Case 10: Link with conflict (other user owns token) → ConflictError thrown
+  it("linkAppStorePurchase: token owned by other user throws ConflictError", async () => {
+    const owned: SubscriptionRow = { id: 10, userId: "OTHER", provider: "app_store", productId: "p", purchaseToken: "tok", status: "active", currentPeriodEnd: null, linkedAt: new Date() };
+    const { service } = buildSut({ findSubscription: owned });
+    await expect(service.linkAppStorePurchase("u1", { originalTransactionId: "tok", productId: "pruvi_ultra_monthly" })).rejects.toThrow(/PURCHASE_TOKEN_OWNED/);
+  });
+
+  // Case 11: Multi-sub GRANT guard with App Store — another active sub with LATER end → ultra.grant uses MAX
+  it("App Store SUBSCRIBED with another active sub having LATER period end: grant uses MAX expiry", async () => {
+    const futureMs = Date.now() + 30 * 86400000;
+    const linked: SubscriptionRow = { id: 10, userId: "u1", provider: "app_store", productId: "pruvi_ultra_monthly", purchaseToken: "tok", status: "pending", currentPeriodEnd: null, linkedAt: new Date() };
+    const farFuture = new Date(Date.now() + 365 * 86400000); // 1 year out
+    const { service, ultra } = buildSut({ findSubscription: linked, maxOtherEnd: farFuture });
+    await service.processAppStoreEnvelope(buildAppStoreEnvelope("SUBSCRIBED", { expiresDate: futureMs }));
+    expect(ultra.grant).toHaveBeenCalledWith("u1", farFuture);
+  });
+
+  // Case 12: DID_CHANGE_RENEWAL_STATUS:AUTO_RENEW_DISABLED → status=canceled, no Ultra change
+  it("App Store DID_CHANGE_RENEWAL_STATUS:AUTO_RENEW_DISABLED → status=canceled, no Ultra change", async () => {
+    const linked: SubscriptionRow = {
+      id: 10, userId: "u1", provider: "app_store", productId: "p", purchaseToken: "tok",
+      status: "active", currentPeriodEnd: new Date(Date.now() + 30 * 86400000), linkedAt: new Date(),
+    };
+    const { service, ultra, repo } = buildSut({ findSubscription: linked });
+    const env = buildAppStoreEnvelope("DID_CHANGE_RENEWAL_STATUS", { subtype: "AUTO_RENEW_DISABLED" });
+    await service.processAppStoreEnvelope(env);
+    expect(repo.updateSubscriptionState).toHaveBeenCalledWith(
+      expect.anything(),
+      10,
+      expect.objectContaining({ status: "canceled" }),
+    );
+    expect(ultra.grant).not.toHaveBeenCalled();
+    expect(ultra.revoke).not.toHaveBeenCalled();
+  });
+
+  // Case 13: linkAppStorePurchase same-user idempotency
+  it("App Store link: same user re-call returns existing subscription, no error", async () => {
+    const existing: SubscriptionRow = {
+      id: 10, userId: "u1", provider: "app_store", productId: "p", purchaseToken: "tok",
+      status: "active", currentPeriodEnd: null, linkedAt: new Date(),
+    };
+    const { service } = buildSut({ findSubscription: existing });
+    const r = await service.linkAppStorePurchase("u1", { originalTransactionId: "tok", productId: "p" });
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) expect(r.value.subscription.id).toBe(10);
   });
 });
