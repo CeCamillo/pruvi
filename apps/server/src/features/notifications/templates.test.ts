@@ -5,6 +5,7 @@ import {
   streakMilestone,
   masteryAchievement,
   overtaken,
+  streakProtected,
   type PushPayload,
 } from "./templates";
 
@@ -39,5 +40,13 @@ describe("overtaken", () => {
     const p = overtaken("Pedro");
     expect(p.title).toBe("Você foi ultrapassado!");
     expect(p.body).toContain("Pedro");
+  });
+});
+
+describe("streakProtected", () => {
+  it("returns pt-BR copy with the day count", () => {
+    const p = streakProtected(7);
+    expect(p.title).toBe("Seu escudo protegeu seu streak!");
+    expect(p.body).toContain("7 dias");
   });
 });
