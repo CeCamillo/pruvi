@@ -14,6 +14,8 @@ import { SweepRepository } from "../notifications/sweep.repository";
 import { Dispatcher } from "../notifications/dispatcher";
 import { StreaksRepository } from "../streaks/streaks.repository";
 import { StreaksService } from "../streaks/streaks.service";
+import { ShieldsRepository } from "../shields/shields.repository";
+import { ShieldsService } from "../shields/shields.service";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
 
@@ -31,6 +33,8 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
   const sweepRepo = new SweepRepository(db);
   const streaksRepo = new StreaksRepository(db);
   const streaksService = new StreaksService(streaksRepo);
+  const shieldsRepo = new ShieldsRepository(db);
+  const shieldsService = new ShieldsService(shieldsRepo);
   const dispatcher = fastify.queues.notificationsSend
     ? new Dispatcher({
         tokensService,
@@ -45,6 +49,8 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     topicsService,
     streaksService,
     dispatcher,
+    shieldsService,
+    fastify.log,
   );
   // POST /sessions/start
   fastify.post(
