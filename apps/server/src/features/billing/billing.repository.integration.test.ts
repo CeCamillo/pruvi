@@ -5,7 +5,7 @@ import { BillingRepository } from "./billing.repository";
 
 describe("BillingRepository (integration)", () => {
   const db = getTestDb();
-  const repo = new BillingRepository(db);
+  const repo = new BillingRepository();
 
   beforeAll(async () => setupTestDb());
   beforeEach(async () => cleanupTestDb());

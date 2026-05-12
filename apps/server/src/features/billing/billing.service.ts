@@ -1,7 +1,7 @@
 import { ok, err, type Result } from "neverthrow";
 import { AppError, ConflictError } from "../../utils/errors";
 import { DEFAULT_SUBSCRIPTION_PERIOD_MS, type GooglePlayLinkResponse, type SubscriptionStatus } from "@pruvi/shared";
-import type { BillingRepository, DbOrTx, SubscriptionRow } from "./billing.repository";
+import type { BillingRepository, SubscriptionRow } from "./billing.repository";
 import type { UltraService } from "../ultra/ultra.service";
 import type { DecodedGooglePlayEvent } from "./google-play.decoder";
 import { decodeGooglePlayPubSubEnvelope } from "./google-play.decoder";
@@ -65,7 +65,7 @@ export class BillingService {
 
       if (decoded.kind === "unknown") {
         await this.repo.markEventProcessed(tx, inserted.id);
-        return { kind: "none" };
+        return { kind: "none" } as PostCommitUltraEffect;
       }
 
       // Find or create subscription row.
@@ -79,7 +79,7 @@ export class BillingService {
 
       // If subscription has no user yet, leave processed_at = NULL so link can replay.
       if (sub.userId === null) {
-        return { kind: "none" };
+        return { kind: "none" } as PostCommitUltraEffect;
       }
 
       await this.repo.markEventProcessed(tx, inserted.id);

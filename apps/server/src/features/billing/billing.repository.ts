@@ -31,7 +31,7 @@ export type BillingEventRow = {
 };
 
 export class BillingRepository {
-  constructor(private db: Db) {}
+  constructor() {}
 
   /** Insert audit row with ON CONFLICT DO NOTHING. Returns the row if newly inserted, null on dup. */
   async insertEvent(

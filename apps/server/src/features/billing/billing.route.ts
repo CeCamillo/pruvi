@@ -12,7 +12,7 @@ import { BillingService } from "./billing.service";
 import { UltraRepository } from "../ultra/ultra.repository";
 import { UltraService } from "../ultra/ultra.service";
 
-const repo = new BillingRepository(db);
+const repo = new BillingRepository();
 const ultra = new UltraService(new UltraRepository(db));
 const service = new BillingService(db, repo, ultra);
 
