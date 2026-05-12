@@ -231,24 +231,21 @@ describe("ShieldsRepository (integration)", () => {
   });
 
   describe("listProtectedDates", () => {
-    it("returns ISO date strings for the user's protected dates", async () => {
+    it("returns ISO date strings for the user's protected dates, ascending", async () => {
       await insertUser("u-list-1", { streakShieldsAvailable: 1 });
 
-      // Insert a protection row directly
-      await db.insert(streakShieldUsage).values({
-        userId: "u-list-1",
-        protectedDate: "2026-05-09",
-      });
+      // Insert out-of-order to verify the ORDER BY in the query
       await db.insert(streakShieldUsage).values({
         userId: "u-list-1",
         protectedDate: "2026-05-10",
       });
+      await db.insert(streakShieldUsage).values({
+        userId: "u-list-1",
+        protectedDate: "2026-05-09",
+      });
 
       const dates = await repo.listProtectedDates("u-list-1");
-      expect(dates).toHaveLength(2);
-      // Should be ISO YYYY-MM-DD strings
-      expect(dates).toContain("2026-05-09");
-      expect(dates).toContain("2026-05-10");
+      expect(dates).toEqual(["2026-05-09", "2026-05-10"]);
     });
 
     it("returns empty array when no protected dates", async () => {

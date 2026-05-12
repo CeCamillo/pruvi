@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import type { db as DbClient } from "@pruvi/db";
 import { user } from "@pruvi/db/schema/auth";
 import { streakShieldUsage } from "@pruvi/db/schema/streak-shield-usage";
@@ -105,7 +105,8 @@ export class ShieldsRepository {
     const rows = await this.db
       .select({ protectedDate: streakShieldUsage.protectedDate })
       .from(streakShieldUsage)
-      .where(eq(streakShieldUsage.userId, userId));
+      .where(eq(streakShieldUsage.userId, userId))
+      .orderBy(asc(streakShieldUsage.protectedDate));
     return rows.map((r) =>
       typeof r.protectedDate === "string" ? r.protectedDate : new Date(r.protectedDate).toISOString().slice(0, 10),
     );

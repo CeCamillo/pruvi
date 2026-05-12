@@ -150,10 +150,13 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
       );
       const { session, transitions } = unwrapResult(result).data;
 
-      // Invalidate caches that depend on session completion
+      // Invalidate caches that depend on session completion.
+      // `shields:` is invalidated unconditionally: if the auto-use hook fires (fire-and-forget),
+      // the shield balance changed; if it doesn't fire, the del is a cheap no-op.
       await Promise.all([
         fastify.cache.del(`session-today:${request.userId}`),
         fastify.cache.del(`streaks:${request.userId}`),
+        fastify.cache.del(`shields:${request.userId}`),
       ]);
 
       // Enqueue next session pre-generation
