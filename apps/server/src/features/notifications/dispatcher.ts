@@ -4,6 +4,7 @@ import {
   streakReminderLate,
   streakMilestone,
   masteryAchievement,
+  overtaken,
   type PushPayload,
 } from "./templates";
 import type { TokensService } from "./tokens.service";
@@ -56,6 +57,26 @@ export class Dispatcher {
         title: payload.title,
         body: payload.body,
         data: { kind },
+      });
+    }
+  }
+
+  async sendOvertakenNotification(overtakenUserId: string, overtakerName: string): Promise<void> {
+    const prefs = await this.deps.prefsRepo.get(overtakenUserId);
+    if (!prefs?.achievementNotificationsEnabled) return;
+
+    const tokens = await this.deps.tokensService.listTokensForUser(overtakenUserId);
+    if (tokens.length === 0) return;
+
+    const payload = overtaken(overtakerName);
+
+    for (let i = 0; i < tokens.length; i += EXPO_BATCH_SIZE) {
+      const chunk = tokens.slice(i, i + EXPO_BATCH_SIZE);
+      await this.deps.sendQueue.add("send", {
+        tokens: chunk,
+        title: payload.title,
+        body: payload.body,
+        data: { kind: "overtaken" },
       });
     }
   }

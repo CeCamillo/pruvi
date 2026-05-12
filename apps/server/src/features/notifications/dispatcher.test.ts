@@ -56,6 +56,40 @@ describe("Dispatcher.sendAchievementNotification", () => {
   });
 });
 
+describe("Dispatcher.sendOvertakenNotification", () => {
+  it("skips when achievement_notifications_enabled is false", async () => {
+    const deps = makeDeps({
+      prefsRepo: {
+        get: vi.fn().mockResolvedValue({ notificationHour: 19, streakRemindersEnabled: true, achievementNotificationsEnabled: false }),
+      },
+    });
+    const d = new Dispatcher(deps as any);
+    await d.sendOvertakenNotification("u", "Pedro");
+    expect(deps.sendQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("skips when user has no tokens", async () => {
+    const deps = makeDeps({
+      tokensService: { listTokensForUser: vi.fn().mockResolvedValue([]) },
+    });
+    const d = new Dispatcher(deps as any);
+    await d.sendOvertakenNotification("u", "Pedro");
+    expect(deps.sendQueue.add).not.toHaveBeenCalled();
+  });
+
+  it("enqueues a send job with the overtaken template payload", async () => {
+    const deps = makeDeps();
+    const d = new Dispatcher(deps as any);
+    await d.sendOvertakenNotification("u", "Pedro");
+    expect(deps.sendQueue.add).toHaveBeenCalledTimes(1);
+    const [, payload] = deps.sendQueue.add.mock.calls[0];
+    expect(payload.tokens).toEqual(["ExponentPushToken[a]"]);
+    expect(payload.title).toBe("Você foi ultrapassado!");
+    expect(payload.body).toContain("Pedro");
+    expect(payload.data).toEqual({ kind: "overtaken" });
+  });
+});
+
 describe("Dispatcher.dispatchStreakReminder", () => {
   it("calls the eligibility query with hour and enqueues a send per chunk", async () => {
     const deps = makeDeps();

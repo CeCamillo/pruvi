@@ -4,6 +4,7 @@ import {
   streakReminderLate,
   streakMilestone,
   masteryAchievement,
+  overtaken,
   type PushPayload,
 } from "./templates";
 
@@ -30,5 +31,13 @@ describe("notification templates", () => {
   it("masteryAchievement includes the subtopic name", () => {
     const p = masteryAchievement("Membrana plasmática");
     expect(p.body).toContain("Membrana plasmática");
+  });
+});
+
+describe("overtaken", () => {
+  it("includes the overtaker name in the body", () => {
+    const p = overtaken("Pedro");
+    expect(p.title).toBe("Você foi ultrapassado!");
+    expect(p.body).toContain("Pedro");
   });
 });

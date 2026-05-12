@@ -33,3 +33,10 @@ export function masteryAchievement(subtopicName: string): PushPayload {
     body: `Você está dominando ${subtopicName}.`,
   };
 }
+
+export function overtaken(overtakerName: string): PushPayload {
+  return {
+    title: "Você foi ultrapassado!",
+    body: `${overtakerName} acabou de te passar no ranking 🔥`,
+  };
+}

@@ -3,18 +3,25 @@ import {
   calculateSM2,
   INITIAL_SM2_STATE,
   calculateXpForAnswer,
+  startOfWeekBrt,
   type QualityScore,
   type Difficulty,
 } from "@pruvi/shared";
+import type { FastifyBaseLogger } from "fastify";
 import type { AppError } from "../../utils/errors";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import type { ReviewsRepository } from "./reviews.repository";
 import type { LivesRepository } from "../lives/lives.repository";
+import type { Dispatcher } from "../notifications/dispatcher";
+import type { FriendshipsRepository } from "../social/friendships/friendships.repository";
 
 export class ReviewsService {
   constructor(
     private repo: ReviewsRepository,
     private livesRepo: LivesRepository,
+    private dispatcher?: Dispatcher,
+    private friendshipsRepo?: FriendshipsRepository,
+    private logger?: FastifyBaseLogger,
   ) {}
 
   /** Record an answer to a question */
@@ -86,6 +93,13 @@ export class ReviewsService {
       await this.repo.awardXp(userId, xpAwarded);
     }
 
+    // 6d. Fire-and-forget overtaken notification hook
+    if (xpAwarded > 0 && this.dispatcher && this.friendshipsRepo) {
+      void this.maybeNotifyOvertakenFriends(userId, xpAwarded).catch((e) => {
+        this.logger?.error({ err: e, userId }, "overtaken notification dispatch failed");
+      });
+    }
+
     // 7. Handle lives — materialize regen, then atomic decrement on wrong answer
     const now = new Date();
     const materialized = await this.livesRepo.materializeRegen(userId, now);
@@ -109,5 +123,23 @@ export class ReviewsService {
       },
       cacheTargets: { subjectId: q.subjectId, topicId: q.topicId },
     });
+  }
+
+  private async maybeNotifyOvertakenFriends(userId: string, xpAwarded: number): Promise<void> {
+    const weekStart = startOfWeekBrt(new Date());
+    const newWeeklyXp = await this.friendshipsRepo!.getWeeklyXp(userId, weekStart);
+    const previousWeeklyXp = newWeeklyXp - xpAwarded;
+    const overtaken = await this.friendshipsRepo!.findOvertakenFriendIds(
+      userId,
+      weekStart,
+      previousWeeklyXp,
+      newWeeklyXp,
+    );
+    if (overtaken.length === 0) return;
+    const me = await this.repo.findUserName(userId);
+    const overtakerName = me?.name ?? "Alguém";
+    await Promise.allSettled(
+      overtaken.map((f) => this.dispatcher!.sendOvertakenNotification(f.friendId, overtakerName)),
+    );
   }
 }
