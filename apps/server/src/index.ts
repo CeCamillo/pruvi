@@ -13,6 +13,7 @@ import { tokensRoutes, preferencesRoutes } from "./features/notifications";
 import { invitationsRoutes, friendshipsRoutes, rankingRoutes } from "./features/social";
 import { ultraRoutes } from "./features/ultra/ultra.route";
 import { shieldsRoutes } from "./features/shields/shields.route";
+import { simuladosRoutes } from "./features/simulados";
 import { livesRoutes } from "./features/lives";
 import { onboardingRoutes } from "./features/onboarding";
 import { progressRoutes } from "./features/progress";
@@ -88,6 +89,7 @@ export async function buildApp() {
   await app.register(rankingRoutes);
   await app.register(ultraRoutes);
   await app.register(shieldsRoutes);
+  await app.register(simuladosRoutes);
 
   // Health check — verifies DB connectivity for ALB
   app.get("/health", async (_request, reply) => {
