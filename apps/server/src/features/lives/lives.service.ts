@@ -10,7 +10,7 @@ export class LivesService {
     userId: string,
   ): Promise<
     Result<
-      { lives: number; maxLives: number; resetsAt: Date | null; unlimited: boolean },
+      { lives: number; maxLives: number; bonusLives: number; resetsAt: Date | null; unlimited: boolean },
       AppError
     >
   > {
@@ -18,6 +18,7 @@ export class LivesService {
     return ok({
       lives: state.lives,
       maxLives: MAX_LIVES,
+      bonusLives: state.bonusLives,
       resetsAt: state.isUltra ? null : nextRegenAt(state.lives, state.lastRegenAt),
       unlimited: state.isUltra,
     });
