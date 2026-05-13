@@ -1,6 +1,7 @@
 import { ok, err, type Result } from "neverthrow";
 import {
   calculateXpForAnswer,
+  calculateSessionCompletionXp,
   getLevelForXp,
   xpForNextLevel,
   type Difficulty,
@@ -66,6 +67,42 @@ export class GamificationService {
       xpAwarded,
       totalXp: updated?.totalXp ?? currentXp + xpAwarded,
       currentLevel: updated?.currentLevel ?? newLevel,
+    });
+  }
+
+  /** Award XP for completing a session, with optional streak multiplier. */
+  async awardXpForSessionCompletion(
+    userId: string,
+    questionsCorrect: number,
+    streakAfter: number,
+  ): Promise<
+    Result<
+      {
+        xpAwarded: number;
+        totalXp: number;
+        currentLevel: number;
+        base: number;
+        correctBonus: number;
+        streakMultiplier: number;
+      },
+      AppError
+    >
+  > {
+    const xp = calculateSessionCompletionXp(questionsCorrect, streakAfter);
+    const current = await this.repo.getUserXp(userId);
+    const currentXp = current?.totalXp ?? 0;
+    const newLevel = getLevelForXp(currentXp + xp.total);
+    const updated = await this.repo.awardXp(userId, xp.total, newLevel);
+
+    // Null-guard: repo.awardXp returns undefined when user row not matched (deleted mid-flow).
+    // Fall back to computed values so the response shape stays consistent.
+    return ok({
+      xpAwarded: xp.total,
+      totalXp: updated?.totalXp ?? currentXp + xp.total,
+      currentLevel: updated?.currentLevel ?? newLevel,
+      base: xp.base,
+      correctBonus: xp.correctBonus,
+      streakMultiplier: xp.streakMultiplier,
     });
   }
 }

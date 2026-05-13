@@ -9,6 +9,7 @@ import type { TopicsService } from "../topics/topics.service";
 import type { Dispatcher } from "../notifications/dispatcher";
 import type { StreaksService } from "../streaks/streaks.service";
 import type { ShieldsService } from "../shields/shields.service";
+import type { GamificationService } from "../gamification/gamification.service";
 
 type SessionRow = NonNullable<Awaited<ReturnType<SessionsRepository["findTodaySession"]>>>;
 type QuestionItem = { id: number; subtopicId: number; [key: string]: unknown };
@@ -22,6 +23,7 @@ export class SessionsService {
     private dispatcher: Dispatcher | null = null,
     private shieldsService?: ShieldsService,
     private logger?: FastifyBaseLogger,
+    private gamificationService?: GamificationService, // NEW — optional, 8th arg
   ) {}
 
   /** Start or resume today's session */
@@ -122,6 +124,15 @@ export class SessionsService {
       {
         session: Awaited<ReturnType<SessionsRepository["completeSession"]>>;
         transitions: import("@pruvi/shared").MasteryTransition[];
+        xpAward: {
+          xpAwarded: number;
+          totalXp: number;
+          currentLevel: number;
+          base: number;
+          correctBonus: number;
+          streakMultiplier: number;
+        } | null;
+        streakDelta: number;
       },
       AppError
     >
@@ -146,6 +157,10 @@ export class SessionsService {
     if (session.status === "completed") {
       return err(new ValidationError("Session already completed"));
     }
+
+    const streakBefore = this.streaksService
+      ? (await this.streaksService.getStreaks(userId)).map((r) => r.currentStreak).unwrapOr(0)
+      : 0;
 
     const snapshot = await this.repo.readMasterySnapshot(sessionId);
     let transitions: import("@pruvi/shared").MasteryTransition[] = [];
@@ -191,7 +206,34 @@ export class SessionsService {
       });
     }
 
-    return ok({ session: completed, transitions });
+    const streakAfter = this.streaksService
+      ? (await this.streaksService.getStreaks(userId)).map((r) => r.currentStreak).unwrapOr(streakBefore)
+      : streakBefore;
+    const streakDelta = streakAfter - streakBefore;
+
+    // Multiplier uses streakAfter — see spec §4.3 / §7.3. Rewards crossing 7→8 on the crossing day.
+    let xpAward: {
+      xpAwarded: number;
+      totalXp: number;
+      currentLevel: number;
+      base: number;
+      correctBonus: number;
+      streakMultiplier: number;
+    } | null = null;
+    if (this.gamificationService) {
+      const awardResult = await this.gamificationService.awardXpForSessionCompletion(
+        userId,
+        questionsCorrect,
+        streakAfter,
+      );
+      if (awardResult.isOk()) {
+        xpAward = awardResult.value;
+      } else {
+        this.logger?.warn?.({ userId, sessionId, err: awardResult.error.message }, "session xp award failed");
+      }
+    }
+
+    return ok({ session: completed, transitions, xpAward, streakDelta });
   }
 
   private async maybeProtectMissedDay(userId: string): Promise<void> {

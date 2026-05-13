@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { StartSessionBodySchema } from "@pruvi/shared";
+import { StartSessionBodySchema, SessionCompleteResponseSchema } from "@pruvi/shared";
 import { SessionsService } from "./sessions.service";
 import { SessionsRepository } from "./sessions.repository";
 import { QuestionsRepository } from "../questions/questions.repository";
@@ -16,6 +16,8 @@ import { StreaksRepository } from "../streaks/streaks.repository";
 import { StreaksService } from "../streaks/streaks.service";
 import { ShieldsRepository } from "../shields/shields.repository";
 import { ShieldsService } from "../shields/shields.service";
+import { GamificationRepository } from "../gamification/gamification.repository";
+import { GamificationService } from "../gamification/gamification.service";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
 
@@ -35,6 +37,8 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
   const streaksService = new StreaksService(streaksRepo);
   const shieldsRepo = new ShieldsRepository(db);
   const shieldsService = new ShieldsService(shieldsRepo);
+  const gamificationRepo = new GamificationRepository(db);
+  const gamificationService = new GamificationService(gamificationRepo);
   const dispatcher = fastify.queues.notificationsSend
     ? new Dispatcher({
         tokensService,
@@ -51,6 +55,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
     dispatcher,
     shieldsService,
     fastify.log,
+    gamificationService,
   );
   // POST /sessions/start
   fastify.post(
@@ -137,6 +142,9 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
             message: "questionsCorrect cannot exceed questionsAnswered",
             path: ["questionsCorrect"],
           }),
+        response: {
+          200: z.object({ success: z.literal(true), data: SessionCompleteResponseSchema }),
+        },
       },
     },
     async (request) => {
@@ -148,7 +156,7 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         questionsAnswered,
         questionsCorrect
       );
-      const { session, transitions } = unwrapResult(result).data;
+      const { session, transitions, xpAward, streakDelta } = unwrapResult(result).data;
 
       // Invalidate caches that depend on session completion.
       // `shields:` is invalidated unconditionally: if the auto-use hook fires (fire-and-forget),
@@ -173,7 +181,13 @@ export const sessionsRoutes: FastifyPluginAsyncZod = async (fastify) => {
         );
       }
 
-      return successResponse({ session, transitions });
+      // Fastify serializes Date fields → ISO strings before the response schema validates them.
+      // The `as unknown as` cast is needed because TypeScript sees Date objects here,
+      // but the wire format (and schema) expects strings.
+      return successResponse({ session, transitions, xpAward, streakDelta }) as unknown as {
+        success: true;
+        data: import("@pruvi/shared").SessionCompleteResponse;
+      };
     }
   );
 };

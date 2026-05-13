@@ -55,3 +55,22 @@ export const XpResponseSchema = z.object({
 });
 
 export type XpResponse = z.infer<typeof XpResponseSchema>;
+
+// ─── Session-completion XP bonus ──────────────────────────────────────────────
+
+export const SESSION_COMPLETION_BASE_XP = 50;
+export const SESSION_PER_CORRECT_XP = 5;
+export const SESSION_STREAK_MULTIPLIER_THRESHOLD = 7;
+export const SESSION_STREAK_MULTIPLIER = 1.10;
+
+export function calculateSessionCompletionXp(
+  questionsCorrect: number,
+  streakAfter: number,
+): { base: number; correctBonus: number; streakMultiplier: number; total: number } {
+  const base = SESSION_COMPLETION_BASE_XP;
+  const correctBonus = Math.max(0, questionsCorrect) * SESSION_PER_CORRECT_XP;
+  const streakMultiplier =
+    streakAfter > SESSION_STREAK_MULTIPLIER_THRESHOLD ? SESSION_STREAK_MULTIPLIER : 1;
+  const total = Math.floor((base + correctBonus) * streakMultiplier);
+  return { base, correctBonus, streakMultiplier, total };
+}
