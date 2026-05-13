@@ -160,6 +160,8 @@ describe("SessionsService", () => {
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap().session).toEqual(completedSession);
       expect(result._unsafeUnwrap().transitions).toEqual([]);
+      expect(result._unsafeUnwrap().xpAward).toBeNull();
+      expect(result._unsafeUnwrap().streakDelta).toBe(0);
       expect(repo.completeSession).toHaveBeenCalledWith(1, 10, 8);
     });
 
@@ -266,11 +268,13 @@ describe("SessionsService.completeSession returns mastery transitions", () => {
     const service = new SessionsService(sessionRepo, questionsService, topicsService);
     const result = await service.completeSession("u1", 9, 5, 4);
     expect(result.isOk()).toBe(true);
-    const { session, transitions } = result._unsafeUnwrap();
+    const { session, transitions, xpAward, streakDelta } = result._unsafeUnwrap();
     expect(session!.status).toBe("completed");
     expect(transitions).toEqual([
       { subtopicId: 7, name: "Membrana", from: "aprendendo", to: "afiado" },
     ]);
+    expect(xpAward).toBeNull();
+    expect(streakDelta).toBe(0);
   });
 
   it("returns empty transitions when snapshot is null", async () => {
@@ -285,8 +289,10 @@ describe("SessionsService.completeSession returns mastery transitions", () => {
       { computeTransitions: vi.fn().mockReturnValue([]), getCurrentMasteryAndNames: vi.fn(), snapshotMastery: vi.fn() } as any,
     );
     const result = await service.completeSession("u1", 9, 0, 0);
-    const { transitions } = result._unsafeUnwrap();
+    const { transitions, xpAward, streakDelta } = result._unsafeUnwrap();
     expect(transitions).toEqual([]);
+    expect(xpAward).toBeNull();
+    expect(streakDelta).toBe(0);
   });
 });
 
@@ -550,5 +556,68 @@ describe("SessionsService.maybeProtectMissedDay protected push hook", () => {
     await new Promise((r) => setImmediate(r));
 
     expect(result.isOk()).toBe(true);
+  });
+});
+
+describe("SessionsService.completeSession with gamificationService", () => {
+  function makeSessionRepo(userId = "u1") {
+    return {
+      findSessionById: vi.fn().mockResolvedValue({ id: 1, userId, status: "active" }),
+      completeSession: vi.fn().mockResolvedValue({ id: 1, status: "completed" }),
+      readMasterySnapshot: vi.fn().mockResolvedValue(null),
+    } as any;
+  }
+
+  function makeTopicsService() {
+    return {
+      computeTransitions: vi.fn().mockReturnValue([]),
+      getCurrentMasteryAndNames: vi.fn().mockResolvedValue({ currentMap: new Map(), namesMap: new Map() }),
+      snapshotMastery: vi.fn(),
+    } as any;
+  }
+
+  it("returns xpAward when gamificationService is provided", async () => {
+    const xpAwardValue = {
+      xpAwarded: 90,
+      totalXp: 90,
+      currentLevel: 2,
+      base: 50,
+      correctBonus: 40,
+      streakMultiplier: 1,
+    };
+    const gamificationService = {
+      awardXpForSessionCompletion: vi.fn().mockResolvedValue(ok(xpAwardValue)),
+    } as any;
+
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+      null, // no streaksService
+      null, // no dispatcher
+      undefined, // no shieldsService
+      undefined, // no logger
+      gamificationService,
+    );
+
+    const result = await service.completeSession("u1", 1, 10, 8);
+    expect(result.isOk()).toBe(true);
+    const value = result._unsafeUnwrap();
+    expect(value.xpAward).toEqual(xpAwardValue);
+    expect(value.streakDelta).toBe(0);
+  });
+
+  it("returns xpAward=null and streakDelta=0 when gamificationService is absent (legacy ctor)", async () => {
+    const service = new SessionsService(
+      makeSessionRepo(),
+      {} as any,
+      makeTopicsService(),
+    );
+
+    const result = await service.completeSession("u1", 1, 5, 4);
+    expect(result.isOk()).toBe(true);
+    const value = result._unsafeUnwrap();
+    expect(value.xpAward).toBeNull();
+    expect(value.streakDelta).toBe(0);
   });
 });
