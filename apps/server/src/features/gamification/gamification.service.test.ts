@@ -72,4 +72,53 @@ describe("GamificationService", () => {
       expect(repo.awardXp).toHaveBeenCalledWith("user-1", 10, 1);
     });
   });
+
+  describe("awardXpForSessionCompletion", () => {
+    it("happy path: 8 correct, streak=3 → xpAwarded=90", async () => {
+      repo.getUserXp.mockResolvedValue({ totalXp: 0, currentLevel: 1 });
+      repo.awardXp.mockResolvedValue({ totalXp: 90, currentLevel: 1 });
+
+      const result = await service.awardXpForSessionCompletion("user-1", 8, 3);
+
+      expect(result.isOk()).toBe(true);
+      const value = result._unsafeUnwrap();
+      expect(value.xpAwarded).toBe(90); // (50 + 40) * 1 = 90
+      expect(repo.awardXp).toHaveBeenCalledWith("user-1", 90, expect.any(Number));
+    });
+
+    it("streak above threshold: 10 correct, streak=8 → repo.awardXp called with 110", async () => {
+      repo.getUserXp.mockResolvedValue({ totalXp: 0, currentLevel: 1 });
+      repo.awardXp.mockResolvedValue({ totalXp: 110, currentLevel: 1 });
+
+      const result = await service.awardXpForSessionCompletion("user-1", 10, 8);
+
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().xpAwarded).toBe(110);
+      expect(repo.awardXp).toHaveBeenCalledWith("user-1", 110, expect.any(Number));
+    });
+
+    it("streak at boundary 7: 10 correct, streak=7 → 100 (no multiplier)", async () => {
+      repo.getUserXp.mockResolvedValue({ totalXp: 0, currentLevel: 1 });
+      repo.awardXp.mockResolvedValue({ totalXp: 100, currentLevel: 1 });
+
+      const result = await service.awardXpForSessionCompletion("user-1", 10, 7);
+
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().xpAwarded).toBe(100); // (50 + 50) * 1 = 100
+      expect(repo.awardXp).toHaveBeenCalledWith("user-1", 100, expect.any(Number));
+    });
+
+    it("repo.awardXp returns undefined (user deleted) → returns ok with fallback totalXp, no throw", async () => {
+      repo.getUserXp.mockResolvedValue({ totalXp: 50, currentLevel: 1 });
+      repo.awardXp.mockResolvedValue(undefined);
+
+      const result = await service.awardXpForSessionCompletion("user-1", 8, 3);
+
+      expect(result.isOk()).toBe(true);
+      const value = result._unsafeUnwrap();
+      // xpAwarded is 90; totalXp falls back to 50 + 90 = 140
+      expect(value.xpAwarded).toBe(90);
+      expect(value.totalXp).toBe(140);
+    });
+  });
 });
