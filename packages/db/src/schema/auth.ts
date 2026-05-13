@@ -30,6 +30,7 @@ export const user = pgTable("user", {
     .default(sql`SUBSTRING(REPLACE(gen_random_uuid()::text, '-', '') FROM 1 FOR 8)`),
   inviteRewardPreference: text("invite_reward_preference", { enum: ["xp", "shield"] }).notNull().default("xp"),
   notificationHour: integer("notification_hour").notNull().default(19),
+  showTimer: boolean("show_timer").notNull().default(true),
   streakRemindersEnabled: boolean("streak_reminders_enabled").notNull().default(true),
   achievementNotificationsEnabled: boolean("achievement_notifications_enabled").notNull().default(true),
   streakShieldsAvailable: integer("streak_shields_available").notNull().default(0),
