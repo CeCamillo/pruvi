@@ -154,4 +154,145 @@ describe("GooglePlayApiClient", () => {
     const r = await client.getSubscription("com.pkg", "tok");
     expect(r).toEqual(new Date("2020-01-01T00:00:00Z"));   // past, not null
   });
+
+  // ─── getOneTimeProduct ───────────────────────────────────────────────────────
+
+  describe("getOneTimeProduct", () => {
+    it("happy path: returns full state object", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(
+        jsonResponse({ purchaseState: 0, consumptionState: 0, acknowledgementState: 0, kind: "androidpublisher#productPurchase" }),
+      );
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.getOneTimeProduct("com.pkg", "vidas_pack_5", "tok-123");
+      expect(r).toEqual({ purchaseState: 0, consumptionState: 0, acknowledgementState: 0 });
+      expect(fetchImpl.mock.calls[1]![0]).toContain("/purchases/products/vidas_pack_5/tokens/tok-123");
+    });
+
+    it("returns null and invalidates cache on 401", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(new Response("", { status: 401 }));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.getOneTimeProduct("com.pkg", "vidas_pack_5", "tok-401");
+      expect(r).toBeNull();
+      expect(logger.error).toHaveBeenCalled();
+      // Next call re-mints token (cache was invalidated)
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT2", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ purchaseState: 0, consumptionState: 0, acknowledgementState: 0 }));
+      const r2 = await client.getOneTimeProduct("com.pkg", "vidas_pack_5", "tok-ok");
+      expect(r2).not.toBeNull();
+      expect(fetchImpl).toHaveBeenCalledTimes(4); // 2 token mints + 2 API calls
+    });
+
+    it("returns null on 404", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(new Response("", { status: 404 }));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.getOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBeNull();
+    });
+
+    it("returns null on 500", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(new Response("", { status: 500 }));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.getOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBeNull();
+    });
+
+    it("returns null on network throw", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockRejectedValueOnce(new Error("ECONNRESET"));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.getOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBeNull();
+      expect(logger.warn).toHaveBeenCalled();
+    });
+
+    it("returns null on non-JSON body", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(nonJsonResponse("<html>error</html>", 200));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.getOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBeNull();
+      expect(logger.warn).toHaveBeenCalled();
+    });
+
+    it("returns null when required fields are missing from response body", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ purchaseState: 0 })); // missing consumptionState + acknowledgementState
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.getOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBeNull();
+      expect(logger.warn).toHaveBeenCalled();
+    });
+
+    it("returns null without HTTP call when creds is null", async () => {
+      const client = new GooglePlayApiClient(null, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.getOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBeNull();
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── acknowledgeOneTimeProduct ───────────────────────────────────────────────
+
+  describe("acknowledgeOneTimeProduct", () => {
+    it("returns true on 200", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(new Response("{}", { status: 200 }));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.acknowledgeOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBe(true);
+      expect(fetchImpl.mock.calls[1]![0]).toContain(":acknowledge");
+    });
+
+    it("returns true on 204", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(new Response("", { status: 204 }));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.acknowledgeOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBe(true);
+    });
+
+    it("returns false and invalidates cache on 401", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(new Response("", { status: 401 }));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.acknowledgeOneTimeProduct("com.pkg", "vidas_pack_5", "tok-401");
+      expect(r).toBe(false);
+      expect(logger.error).toHaveBeenCalled();
+      // Cache should have been invalidated — next call re-mints
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT2", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(new Response("", { status: 204 }));
+      const r2 = await client.acknowledgeOneTimeProduct("com.pkg", "vidas_pack_5", "tok-ok");
+      expect(r2).toBe(true);
+      expect(fetchImpl).toHaveBeenCalledTimes(4);
+    });
+
+    it("returns false on 4xx/5xx", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockResolvedValueOnce(new Response("", { status: 409 }));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.acknowledgeOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBe(false);
+      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it("returns false on network throw", async () => {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ access_token: "AT1", expires_in: 3600, token_type: "Bearer" }));
+      fetchImpl.mockRejectedValueOnce(new Error("ECONNRESET"));
+      const client = new GooglePlayApiClient(creds, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.acknowledgeOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBe(false);
+      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it("returns false without HTTP call when creds is null", async () => {
+      const client = new GooglePlayApiClient(null, { fetchImpl: fetchImpl as unknown as typeof fetch, logger });
+      const r = await client.acknowledgeOneTimeProduct("com.pkg", "vidas_pack_5", "tok");
+      expect(r).toBe(false);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+  });
 });

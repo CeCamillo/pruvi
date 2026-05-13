@@ -5,6 +5,11 @@ import { user } from "@pruvi/db/schema/auth";
 import { LivesRepository } from "./lives.repository";
 import { LIVES_REGEN_INTERVAL_MS, MAX_LIVES } from "@pruvi/shared";
 
+async function insertUser(id: string) {
+  const db = getTestDb();
+  await db.insert(user).values({ id, name: "Test", email: `${id}@test.com`, lives: MAX_LIVES });
+}
+
 const db = getTestDb();
 const repo = new LivesRepository(db);
 
@@ -99,7 +104,7 @@ describe("LivesRepository (integration)", () => {
   describe("materializeRegen", () => {
     it("no-op when lives at MAX (anchor null)", async () => {
       const r = await repo.materializeRegen(userId, new Date());
-      expect(r).toEqual({ lives: MAX_LIVES, lastRegenAt: null, isUltra: false });
+      expect(r).toEqual({ lives: MAX_LIVES, bonusLives: 0, lastRegenAt: null, isUltra: false });
     });
 
     it("regens +2 after 8h elapsed from anchor", async () => {
@@ -123,7 +128,7 @@ describe("LivesRepository (integration)", () => {
         .where(eq(user.id, userId));
       const now = new Date("2026-05-11T10:00:00Z"); // > 24h, enough to fill to MAX
       const r = await repo.materializeRegen(userId, now);
-      expect(r).toEqual({ lives: MAX_LIVES, lastRegenAt: null, isUltra: false });
+      expect(r).toEqual({ lives: MAX_LIVES, bonusLives: 0, lastRegenAt: null, isUltra: false });
     });
 
     it("Ultra user with active subscription: returns MAX_LIVES, lastRegenAt null, isUltra true regardless of stored lives", async () => {
@@ -155,6 +160,60 @@ describe("LivesRepository (integration)", () => {
       // Normal regen applies: 2 + 2 = 4
       expect(r.lives).toBe(4);
       expect(r.isUltra).toBe(false);
+    });
+  });
+
+  describe("bonus lives integration", () => {
+    it("tryDecrement drains bonus_lives first when > 0", async () => {
+      await insertUser("u-bonus-1");
+      await db.update(user).set({ lives: 3, bonusLives: 2 }).where(eq(user.id, "u-bonus-1"));
+      const result = await repo.tryDecrement("u-bonus-1", new Date());
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.livesAfter).toBe(3);          // regen pool untouched
+        expect(result.bonusLivesAfter).toBe(1);     // bonus drained
+      }
+    });
+
+    it("tryDecrement falls back to regen pool when bonus_lives = 0", async () => {
+      await insertUser("u-bonus-2");
+      await db.update(user).set({ lives: 3, bonusLives: 0 }).where(eq(user.id, "u-bonus-2"));
+      const result = await repo.tryDecrement("u-bonus-2", new Date());
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.livesAfter).toBe(2);
+        expect(result.bonusLivesAfter).toBe(0);
+      }
+    });
+
+    it("tryDecrement fails when both pools are zero (non-Ultra)", async () => {
+      await insertUser("u-bonus-3");
+      await db.update(user).set({ lives: 0, bonusLives: 0 }).where(eq(user.id, "u-bonus-3"));
+      const result = await repo.tryDecrement("u-bonus-3", new Date());
+      expect(result.ok).toBe(false);
+    });
+
+    it("materializeRegen exposes bonusLives", async () => {
+      await insertUser("u-bonus-4");
+      await db.update(user).set({ lives: 2, bonusLives: 7 }).where(eq(user.id, "u-bonus-4"));
+      const result = await repo.materializeRegen("u-bonus-4", new Date());
+      expect(result.bonusLives).toBe(7);
+    });
+
+    it("concurrent tryDecrement with bonusLives=1: exactly one wins the bonus drain", async () => {
+      await insertUser("u-bonus-5");
+      await db.update(user).set({ lives: 3, bonusLives: 1 }).where(eq(user.id, "u-bonus-5"));
+
+      const now = new Date();
+      const [a, b] = await Promise.all([repo.tryDecrement("u-bonus-5", now), repo.tryDecrement("u-bonus-5", now)]);
+      expect(a.ok).toBe(true);
+      expect(b.ok).toBe(true);
+
+      // After both: bonus must end at 0 and regen-pool at 2 (one drained bonus, the other fell back to regen).
+      const final = await db.select({ lives: user.lives, bonusLives: user.bonusLives })
+        .from(user).where(eq(user.id, "u-bonus-5"));
+      expect(final[0]!.bonusLives).toBe(0);
+      expect(final[0]!.lives).toBe(2);
     });
   });
 });

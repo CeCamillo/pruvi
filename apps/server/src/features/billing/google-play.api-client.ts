@@ -2,6 +2,12 @@ import { mintJwt, type ServiceAccountCreds } from "./google-play.service-account
 
 type Logger = { warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void };
 
+export type OneTimeProductState = {
+  purchaseState: number; // 0 = purchased, 1 = canceled, 2 = pending
+  consumptionState: number; // 0 = yet to be consumed, 1 = consumed
+  acknowledgementState: number; // 0 = yet to acknowledge, 1 = acknowledged
+};
+
 type TokenCache = { token: string; expiresAtMs: number } | null;
 
 const TOKEN_SKEW_MS = 60_000;
@@ -62,6 +68,69 @@ export class GooglePlayApiClient {
       return null;
     }
     return d;
+  }
+
+  async getOneTimeProduct(packageName: string, productId: string, purchaseToken: string): Promise<OneTimeProductState | null> {
+    if (!this.creds) return null;
+    const token = await this.getAccessToken();
+    if (!token) return null;
+    const url = `${ANDROIDPUBLISHER_BASE}/applications/${encodeURIComponent(packageName)}/purchases/products/${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}`;
+    let res: Response;
+    try {
+      res = await this.fetchImpl(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+    } catch (e) {
+      this.logger.warn({ err: (e as Error).message, packageName, productId, purchaseToken }, "google-play products.get network error");
+      return null;
+    }
+    if (res.status === 401) {
+      this.tokenCache = null;
+      this.logger.error({ status: 401, packageName, productId, purchaseToken }, "google-play products.get auth failed — cache invalidated");
+      return null;
+    }
+    if (!res.ok) {
+      this.logger.warn({ status: res.status, packageName, productId, purchaseToken }, "google-play products.get non-ok");
+      return null;
+    }
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch (e) {
+      this.logger.warn({ err: (e as Error).message }, "google-play products.get non-json body");
+      return null;
+    }
+    const b = body as Partial<OneTimeProductState>;
+    if (typeof b.purchaseState !== "number" || typeof b.consumptionState !== "number" || typeof b.acknowledgementState !== "number") {
+      this.logger.warn({ packageName, productId, purchaseToken }, "google-play products.get missing fields");
+      return null;
+    }
+    return { purchaseState: b.purchaseState, consumptionState: b.consumptionState, acknowledgementState: b.acknowledgementState };
+  }
+
+  async acknowledgeOneTimeProduct(packageName: string, productId: string, purchaseToken: string): Promise<boolean> {
+    if (!this.creds) return false;
+    const token = await this.getAccessToken();
+    if (!token) return false;
+    const url = `${ANDROIDPUBLISHER_BASE}/applications/${encodeURIComponent(packageName)}/purchases/products/${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}:acknowledge`;
+    let res: Response;
+    try {
+      res = await this.fetchImpl(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: "{}",
+      });
+    } catch (e) {
+      this.logger.error({ err: (e as Error).message, packageName, productId, purchaseToken }, "google-play acknowledge network error");
+      return false;
+    }
+    if (res.status === 401) {
+      this.tokenCache = null;
+      this.logger.error({ packageName, productId, purchaseToken }, "google-play acknowledge auth failed — cache invalidated");
+      return false;
+    }
+    // 200 OK or 204 No Content both indicate success.
+    if (res.status === 200 || res.status === 204) return true;
+    this.logger.error({ status: res.status, packageName, productId, purchaseToken }, "google-play acknowledge non-ok");
+    return false;
   }
 
   private async getAccessToken(): Promise<string | null> {

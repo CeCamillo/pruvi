@@ -12,6 +12,7 @@ export const AnswerQuestionResponseSchema = z.object({
   correct: z.boolean(),
   correctOptionIndex: z.number().int().min(0).max(3),
   livesRemaining: z.number().int().min(0),
+  bonusLivesAfter: z.number().int().nonnegative(),
   xpAwarded: z.number().int().min(0),
   explanation: z.string().nullable(),
 });

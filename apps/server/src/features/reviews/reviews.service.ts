@@ -36,6 +36,7 @@ export class ReviewsService {
           correct: boolean;
           correctOptionIndex: number;
           livesRemaining: number;
+          bonusLivesAfter: number;
           xpAwarded: number;
           explanation: string | null;
         };
@@ -104,6 +105,7 @@ export class ReviewsService {
     const now = new Date();
     const materialized = await this.livesRepo.materializeRegen(userId, now);
     let livesRemaining = materialized.lives;
+    let bonusLivesAfter = materialized.bonusLives;
 
     if (!correct) {
       const decrement = await this.livesRepo.tryDecrement(userId, now);
@@ -111,6 +113,7 @@ export class ReviewsService {
         return err(new ValidationError("No lives remaining. Wait for refill."));
       }
       livesRemaining = decrement.livesAfter;
+      bonusLivesAfter = decrement.bonusLivesAfter;
     }
 
     return ok({
@@ -118,6 +121,7 @@ export class ReviewsService {
         correct,
         correctOptionIndex: q.correctOptionIndex,
         livesRemaining,
+        bonusLivesAfter,
         xpAwarded,
         explanation: q.explanation ?? null,
       },

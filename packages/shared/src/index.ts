@@ -19,3 +19,4 @@ export * from "./shields";
 export * from "./time";
 export * from "./simulado";
 export * from "./billing";
+export * from "./lives-packs";

@@ -23,7 +23,9 @@ export const livesRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const cached = await fastify.cache.get<{
         lives: number;
         maxLives: number;
+        bonusLives: number;
         resetsAt: string | null;
+        unlimited: boolean;
       }>(cacheKey);
       if (cached) {
         return successResponse(cached);

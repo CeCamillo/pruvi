@@ -16,6 +16,7 @@ export class LivesRepository {
     const rows = await this.db
       .select({
         lives: user.lives,
+        bonusLives: user.bonusLives,
         livesLastRegenAt: user.livesLastRegenAt,
         isUltra: user.isUltra,
         ultraExpiresAt: user.ultraExpiresAt,
@@ -29,15 +30,15 @@ export class LivesRepository {
   async materializeRegen(
     userId: string,
     now: Date,
-  ): Promise<{ lives: number; lastRegenAt: Date | null; isUltra: boolean }> {
+  ): Promise<{ lives: number; bonusLives: number; lastRegenAt: Date | null; isUltra: boolean }> {
     const current = await this.getUserLives(userId);
     if (!current) {
-      return { lives: MAX_LIVES, lastRegenAt: null, isUltra: false };
+      return { lives: MAX_LIVES, bonusLives: 0, lastRegenAt: null, isUltra: false };
     }
 
     // Ultra bypass: skip regen logic entirely
     if (isUltraActive(current, now)) {
-      return { lives: MAX_LIVES, lastRegenAt: null, isUltra: true };
+      return { lives: MAX_LIVES, bonusLives: current.bonusLives, lastRegenAt: null, isUltra: true };
     }
 
     const snap = computeRegenSnapshot(current.lives, current.livesLastRegenAt, now);
@@ -47,23 +48,40 @@ export class LivesRepository {
         .set({ lives: snap.lives, livesLastRegenAt: snap.lastRegenAt })
         .where(eq(user.id, userId));
     }
-    return { lives: snap.lives, lastRegenAt: snap.lastRegenAt, isUltra: false };
+    return { lives: snap.lives, bonusLives: current.bonusLives, lastRegenAt: snap.lastRegenAt, isUltra: false };
   }
 
   async tryDecrement(
     userId: string,
     now: Date,
   ): Promise<
-    | { ok: true; livesAfter: number; lastRegenAt: Date | null; isUltra: boolean }
+    | { ok: true; livesAfter: number; bonusLivesAfter: number; lastRegenAt: Date | null; isUltra: boolean }
     | { ok: false }
   > {
     // Ultra bypass: skip atomic UPDATE entirely
     const current = await this.getUserLives(userId);
     if (current && isUltraActive(current, now)) {
-      return { ok: true, livesAfter: MAX_LIVES, lastRegenAt: null, isUltra: true };
+      return { ok: true, livesAfter: MAX_LIVES, bonusLivesAfter: current.bonusLives, lastRegenAt: null, isUltra: true };
     }
 
-    // Existing race-free atomic UPDATE for non-Ultra users
+    // Attempt 1: drain bonus_lives if > 0 (atomic, predicate-in-WHERE)
+    const bonusResult = await this.db
+      .update(user)
+      .set({ bonusLives: sql`${user.bonusLives} - 1` })
+      .where(and(eq(user.id, userId), gt(user.bonusLives, 0)))
+      .returning({ lives: user.lives, bonusLives: user.bonusLives, livesLastRegenAt: user.livesLastRegenAt });
+
+    if (bonusResult[0]) {
+      return {
+        ok: true,
+        livesAfter: bonusResult[0].lives,
+        bonusLivesAfter: bonusResult[0].bonusLives,
+        lastRegenAt: bonusResult[0].livesLastRegenAt,
+        isUltra: false,
+      };
+    }
+
+    // Attempt 2: existing regen-pool decrement
     const result = await this.db
       .update(user)
       .set({
@@ -73,11 +91,12 @@ export class LivesRepository {
       .where(and(eq(user.id, userId), gt(user.lives, 0)))
       .returning({
         lives: user.lives,
+        bonusLives: user.bonusLives,
         livesLastRegenAt: user.livesLastRegenAt,
       });
 
     const row = result[0];
     if (!row) return { ok: false };
-    return { ok: true, livesAfter: row.lives, lastRegenAt: row.livesLastRegenAt, isUltra: false };
+    return { ok: true, livesAfter: row.lives, bonusLivesAfter: row.bonusLives, lastRegenAt: row.livesLastRegenAt, isUltra: false };
   }
 }
