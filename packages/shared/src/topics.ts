@@ -62,8 +62,11 @@ export const MasteryTransitionSchema = z.object({
   to: MasteryStateSchema,
 });
 
+export const MasteryTransitionsSchema = z.array(MasteryTransitionSchema);
+
 export type MasteryListItem = z.infer<typeof MasteryListItemSchema>;
 export type SubtopicMastery = z.infer<typeof SubtopicMasterySchema>;
 export type TrilhaResponse = z.infer<typeof TrilhaResponseSchema>;
 export type TopicDetailResponse = z.infer<typeof TopicDetailResponseSchema>;
 export type MasteryTransition = z.infer<typeof MasteryTransitionSchema>;
+export type MasteryTransitions = z.infer<typeof MasteryTransitionsSchema>;
