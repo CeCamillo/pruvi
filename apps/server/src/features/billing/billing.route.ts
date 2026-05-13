@@ -2,7 +2,7 @@ import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { GooglePlayLinkBodySchema, GooglePlayLinkResponseSchema, AppStoreLinkBodySchema, AppStoreLinkResponseSchema } from "@pruvi/shared";
+import { GooglePlayLinkBodySchema, GooglePlayLinkResponseSchema, AppStoreLinkBodySchema, AppStoreLinkResponseSchema, LivesPackRedeemBodySchema, LivesPackRedeemResponseSchema } from "@pruvi/shared";
 import { env } from "@pruvi/env/server";
 import { db } from "@pruvi/db";
 import { successResponse, unwrapResult } from "../../types";
@@ -16,6 +16,8 @@ import { GooglePlayApiClient } from "./google-play.api-client";
 import { AppStoreJwsVerifier } from "./app-store.jws-verifier";
 import { GoogleJwksCache } from "./google-oidc.jwks-cache";
 import { GoogleOidcVerifier, OidcVerificationError } from "./google-oidc.verifier";
+import { LivesPacksRepository } from "./lives-packs.repository";
+import { LivesPacksService } from "./lives-packs.service";
 
 const repo = new BillingRepository();
 const ultra = new UltraService(new UltraRepository(db));
@@ -60,6 +62,15 @@ export const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
   const apiClient = new GooglePlayApiClient(loadServiceAccountFromEnv(env), { logger: fastify.log });
   const jwsVerifier = AppStoreJwsVerifier.fromBundledRoot();
   const service = new BillingService(db, repo, ultra, apiClient, env.GOOGLE_PLAY_PACKAGE_NAME ?? null, jwsVerifier);
+
+  const livesPacksRepo = new LivesPacksRepository();
+  const livesPacksService = new LivesPacksService(
+    db,
+    livesPacksRepo,
+    apiClient,
+    env.GOOGLE_PLAY_PACKAGE_NAME ?? null,
+    (userId) => fastify.cache.del(`lives:${userId}`),
+  );
 
   let googlePreHandler = webhookGuard;
   if (env.GOOGLE_PLAY_VERIFY_OIDC) {
@@ -184,6 +195,21 @@ export const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
     },
     async (request) => {
       const data = unwrapResult(await service.linkAppStorePurchase(request.userId, request.body)).data;
+      return successResponse(data);
+    },
+  );
+
+  fastify.post(
+    "/billing/lives-pack/redeem",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        body: LivesPackRedeemBodySchema,
+        response: { 200: z.object({ success: z.literal(true), data: LivesPackRedeemResponseSchema }) },
+      },
+    },
+    async (request) => {
+      const data = unwrapResult(await livesPacksService.redeemGooglePlay(request.userId, request.body)).data;
       return successResponse(data);
     },
   );
