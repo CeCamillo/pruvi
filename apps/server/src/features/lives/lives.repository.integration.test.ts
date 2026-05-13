@@ -199,5 +199,21 @@ describe("LivesRepository (integration)", () => {
       const result = await repo.materializeRegen("u-bonus-4", new Date());
       expect(result.bonusLives).toBe(7);
     });
+
+    it("concurrent tryDecrement with bonusLives=1: exactly one wins the bonus drain", async () => {
+      await insertUser("u-bonus-5");
+      await db.update(user).set({ lives: 3, bonusLives: 1 }).where(eq(user.id, "u-bonus-5"));
+
+      const now = new Date();
+      const [a, b] = await Promise.all([repo.tryDecrement("u-bonus-5", now), repo.tryDecrement("u-bonus-5", now)]);
+      expect(a.ok).toBe(true);
+      expect(b.ok).toBe(true);
+
+      // After both: bonus must end at 0 and regen-pool at 2 (one drained bonus, the other fell back to regen).
+      const final = await db.select({ lives: user.lives, bonusLives: user.bonusLives })
+        .from(user).where(eq(user.id, "u-bonus-5"));
+      expect(final[0]!.bonusLives).toBe(0);
+      expect(final[0]!.lives).toBe(2);
+    });
   });
 });

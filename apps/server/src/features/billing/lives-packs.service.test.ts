@@ -43,19 +43,22 @@ function buildSut(opts: {
   apiClient?: MockApiClient;
   packageName?: string | null;
   invalidateLivesCache?: ReturnType<typeof vi.fn>;
+  logger?: { error: ReturnType<typeof vi.fn> };
 } = {}) {
   const repo = opts.repo ?? makeRepo();
   const apiClient = opts.apiClient ?? makeApiClient();
   const db = makeDb(repo);
   const invalidateLivesCache = opts.invalidateLivesCache ?? vi.fn().mockResolvedValue(undefined);
+  const logger = opts.logger ?? { error: vi.fn() };
   const service = new LivesPacksService(
     db,
     repo as unknown as LivesPacksRepository,
     apiClient as unknown as GooglePlayApiClient,
     opts.packageName !== undefined ? opts.packageName : "com.pruvi.app",
     invalidateLivesCache,
+    logger,
   );
-  return { service, repo, apiClient, db, invalidateLivesCache };
+  return { service, repo, apiClient, db, invalidateLivesCache, logger };
 }
 
 describe("LivesPacksService", () => {
@@ -152,22 +155,20 @@ describe("LivesPacksService", () => {
   });
 
   it("TX rollback path: incrementBonusLives returns null → AppError CREDIT_TX_FAILED + critical log", async () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const repo = makeRepo({
       incrementBonusLives: vi.fn().mockResolvedValue(null), // user deleted
     });
-    const { service } = buildSut({ repo });
+    const { service, logger } = buildSut({ repo });
     const result = await service.redeemGooglePlay("u1", { purchaseToken: "tok", productId: "vidas_pack_5" });
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.code).toBe("CREDIT_TX_FAILED");
       expect(result.error.statusCode).toBe(500);
     }
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "[CRITICAL] app-store-acked-but-uncredited",
-      expect.objectContaining({ userId: "u1" }),
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u1", purchaseToken: "tok", productId: "vidas_pack_5" }),
+      "app-store-acked-but-uncredited",
     );
-    consoleSpy.mockRestore();
   });
 
   it("packageName null → AppError BILLING_NOT_CONFIGURED", async () => {

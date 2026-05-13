@@ -7,15 +7,23 @@ import type { db as DbClient } from "@pruvi/db";
 
 type Db = typeof DbClient;
 type CacheInvalidator = (userId: string) => Promise<void>;
+type CriticalLogger = { error: (obj: Record<string, unknown>, msg: string) => void };
 
 export class LivesPacksService {
+  private readonly logger: CriticalLogger;
+
   constructor(
     private db: Db,
     private repo: LivesPacksRepository,
     private apiClient: GooglePlayApiClient,
     private packageName: string | null,
     private invalidateLivesCache: CacheInvalidator,
-  ) {}
+    logger?: CriticalLogger,
+  ) {
+    this.logger = logger ?? {
+      error: (obj, msg) => console.error(msg, obj),
+    };
+  }
 
   async redeemGooglePlay(
     userId: string,
@@ -80,13 +88,11 @@ export class LivesPacksService {
       return ok(result);
     } catch (e) {
       // CRITICAL: ack succeeded but TX failed. User was charged + acked but got no lives.
-      console.error("[CRITICAL] app-store-acked-but-uncredited", {
-        userId,
-        purchaseToken: body.purchaseToken,
-        productId: body.productId,
-        livesGranted,
-        err: (e as Error).message,
-      });
+      // Alert pattern: `app-store-acked-but-uncredited` — manual operator recovery required.
+      this.logger.error(
+        { userId, purchaseToken: body.purchaseToken, productId: body.productId, livesGranted, err: (e as Error).message },
+        "app-store-acked-but-uncredited",
+      );
       return err(new AppError("CREDIT_TX_FAILED", 500, "CREDIT_TX_FAILED"));
     }
   }

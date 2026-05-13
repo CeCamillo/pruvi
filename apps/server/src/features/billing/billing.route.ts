@@ -70,6 +70,7 @@ export const billingRoutes: FastifyPluginAsyncZod = async (fastify) => {
     apiClient,
     env.GOOGLE_PLAY_PACKAGE_NAME ?? null,
     (userId) => fastify.cache.del(`lives:${userId}`),
+    fastify.log,   // pino-compatible — CRITICAL ack-but-uncredited log goes through structured pipeline
   );
 
   let googlePreHandler = webhookGuard;
