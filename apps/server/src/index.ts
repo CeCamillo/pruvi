@@ -24,6 +24,7 @@ import { streaksRoutes } from "./features/streaks";
 import { subjectsRoutes } from "./features/subjects";
 import { topicsRoutes } from "./features/topics";
 import { usersRoutes } from "./features/users";
+import { sessionPreferencesRoutes } from "./features/users/session-preferences.route";
 import { authPlugin } from "./plugins/auth";
 import { errorHandlerPlugin } from "./plugins/error-handler";
 import { queuePlugin } from "./plugins/queue";
@@ -85,6 +86,7 @@ export async function buildApp() {
   await app.register(topicsRoutes);
   await app.register(tokensRoutes);
   await app.register(preferencesRoutes);
+  await app.register(sessionPreferencesRoutes);
   await app.register(invitationsRoutes);
   await app.register(friendshipsRoutes);
   await app.register(rankingRoutes);

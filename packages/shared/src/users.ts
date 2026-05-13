@@ -29,3 +29,9 @@ export const InviteRewardPreferenceResponseSchema = z.object({
   preference: z.enum(["xp", "shield"]),
 });
 export type InviteRewardPreferenceResponse = z.infer<typeof InviteRewardPreferenceResponseSchema>;
+
+export const SessionPreferencesSchema = z.object({
+  showTimer: z.boolean(),
+});
+export type SessionPreferences = z.infer<typeof SessionPreferencesSchema>;
+export const UpdateSessionPreferencesBodySchema = SessionPreferencesSchema;
